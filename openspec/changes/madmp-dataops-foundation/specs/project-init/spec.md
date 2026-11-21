@@ -51,7 +51,7 @@ Init SHALL render the superdataset from its template, register every dataset tha
 - **THEN** every dataset with a path is present there and the ma-DMP is present
 
 ### Requirement: Platform repositories
-With a platform configured, init SHALL create a repository per dataset at `<group>/<path>` (as subgroups, or with `/` replaced by `.` on platforms without subgroups), stream instances at `<group>/sourcedata/<stream>/<site>_<instrument>`, and the superdataset at `<group>`. Without a platform, init SHALL create the same structure locally.
+With a platform configured, init SHALL create a repository per dataset at `<group>/<path>` (as subgroups, or with `/` replaced by `.` on platforms without subgroups), stream instances at `<group>/sourcedata/<stream>/<site>_<instrument>`, and the superdataset at `<group>/superdataset`. Without a platform, init SHALL create the same structure locally.
 
 #### Scenario: Flat platform
 - **WHEN** init targets a platform without subgroups and a dataset has path `derivatives/fmriprep`
@@ -69,7 +69,7 @@ Init SHALL protect `dev`, `pilot` and `convert/*`, require one approval to merge
 - **THEN** the platform rejects squash merges for it
 
 ### Requirement: Idempotent reconcile
-Re-running init on an unchanged plan SHALL change nothing. `--dry-run` SHALL report what would change.
+Re-running init on an unchanged plan SHALL change nothing in the project; configuring remotes in a fresh working directory is reported separately as local setup. `--dry-run` SHALL report what would change.
 
 #### Scenario: Second run
 - **WHEN** init runs twice on the same plan

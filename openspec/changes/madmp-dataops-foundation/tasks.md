@@ -14,13 +14,13 @@
 
 ## 3. Init
 
-- [ ] 3.1 Render a dataset from a copier template at a pinned version into a new DataLad dataset recording `faire.dataset-id`; verify with a local template repository
-- [ ] 3.2 Install container collections and check referenced images; verify the missing-image scenario
-- [ ] 3.3 Install sources under `sourcedata/` including stream instances, in provenance order; verify the chain and stream-instances scenarios
-- [ ] 3.4 Configure `collection`/`accepted` remotes from `access_url` with `wanted`; verify with `file://` and RIA remotes
-- [ ] 3.5 Render the superdataset, register datasets at their paths with relative URLs, track the ma-DMP; verify a clone installs every dataset with a path
-- [ ] 3.6 Implement reconcile (idempotent run, additions, reported non-additive edits, `--dry-run`); verify each project-init reconcile scenario locally
-- [ ] 3.7 Platform adapter interface, in-memory fake and GitLab implementation (groups, repositories, protections, approvals, merge method, CI variables, pull requests, comments, pipeline start); verify init against the fake and document GitLab setup in `docs/gitlab.md`
+- [x] 3.1 Render a dataset from a copier template at a pinned version into a new DataLad dataset recording `faire.dataset-id`; verify with a local template repository
+- [x] 3.2 Install container collections and check referenced images; verify the missing-image scenario
+- [x] 3.3 Install sources under `sourcedata/` including stream instances, in provenance order; verify the chain and stream-instances scenarios
+- [x] 3.4 Configure `collection`/`accepted` remotes from `access_url` with `wanted`; verify with `file://` and RIA remotes
+- [x] 3.5 Render the superdataset, register datasets at their paths with relative URLs, track the ma-DMP; verify a clone installs every dataset with a path
+- [x] 3.6 Implement reconcile (idempotent run, additions, reported non-additive edits, `--dry-run`); verify each project-init reconcile scenario locally
+- [x] 3.7 Platform adapter interface, in-memory fake and GitLab implementation (groups, repositories, protections, approvals, merge method, CI variables, pull requests, comments, pipeline start); verify init against the fake and document GitLab setup in `docs/gitlab.md`
 
 ## 4. Reference templates
 

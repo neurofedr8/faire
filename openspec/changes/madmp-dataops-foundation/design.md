@@ -30,13 +30,13 @@ Extension data lives under a `faire` key on `dmp`, `dataset`, `technical_resourc
 *Alternative:* a `faire.sourcedata` id list. Rejected: provenance would be invisible to standard tools.
 
 ### D2. Explicit superdataset paths, mirrored on the platform
-`faire.path` is written in the ma-DMP (a BIDS-study layout is the author's choice, not faire logic). A dataset without a path is not registered; sourcedata streams have none. Platform repositories mirror the path (`<group>/derivatives/fmriprep` as subgroups, `derivatives.fmriprep` on flat platforms); streams go to `<group>/sourcedata/<stream>/<site>_<instrument>`. Subdataset URLs are relative so the tree resolves on any host with the same layout.
+`faire.path` is written in the ma-DMP (a BIDS-study layout is the author's choice, not faire logic). A dataset without a path is not registered; sourcedata streams have none. Platform repositories mirror the path (`<group>/derivatives/fmriprep` as subgroups, `derivatives.fmriprep` on flat platforms); streams go to `<group>/sourcedata/<stream>/<site>_<instrument>`; the superdataset to `<group>/superdataset` (a GitLab group cannot also be a repository). Subdataset URLs are relative so the tree resolves on any host with the same layout.
 
 ### D3. Distributions written out per dataset
 No sharing mechanism in this iteration: JSON instances have no `$ref`, and each distribution will carry its own facts once write-back exists. A future ma-DMP editor generates the repetition.
 
 ### D4. DataLad URLs in `access_url`, creation inferred from the scheme
-`ria+…` → RIA sibling (storage-only allowed); `ssh://`/`file://` → plain sibling; `datalad-annex::` → created by push; known forge hosts (GIN, the configured platform) → created through their API; anything else must exist. `host.url` stays the human landing page. URLs carrying credentials are rejected.
+`ria+…` → RIA sibling (storage-only for `collection`/`accepted`, git history stays on the platform); `ssh://`/`file://`/path → plain sibling, with `/<instance>` appended for stream instances since they share their stream's URL; `datalad-annex::` → created by push; known forge hosts (GIN, the configured platform) → created through their API; anything else must exist. `host.url` stays the human landing page. URLs carrying credentials are rejected.
 
 ### D5. Templates and containers are ready-made
 Datasets and the superdataset are rendered with copier from a pinned git reference; copier's answers file records template, version and data. A dataset template ships complete datalad-container entries pointing into container-collection subdatasets it declares at pinned revisions. `init` installs the collections and checks that every referenced image exists; it never builds, copies or freezes images.
@@ -65,7 +65,7 @@ Datasets: `dev` (accepted), `pilot` (never merged into `dev`), `convert/*`. Supe
 `faire release` runs on `rel/x.y.z` created from superdataset `dev`: bump all pointers to the datasets' `dev` heads (once), check that every `sourcedata/` pointer is an ancestor of the commit referenced for its source (blocking) and report incomplete derivatives, run release-stage checks, `sync --stage release`, check reachability (commits and wanted content on every release sibling). Merge to `main` (human approval) tags the superdataset and each dataset at its pointed commit and pushes the tags. Equality of pointers (rather than ancestry) was rejected: session-by-session merges almost never satisfy it.
 
 ### D13. Reconcile from facts already in the datasets
-Comparison uses the copier answers, `faire.dataset-id` in `.datalad/config`, `.gitmodules`, remote configuration and the platform API. Additions are applied (new instruments are registered downstream through a pull request); `wanted` changes are applied; template, version, source or path changes and removed datasets are reported with a non-zero exit.
+Comparison uses the copier answers, `faire.dataset-id`, `faire.instance` and `faire.template-*` in `.datalad/config`, `.gitmodules`, remote configuration and the platform API. Additions are applied (new instruments are registered downstream through a pull request); `wanted` changes are applied; template, version, source or path changes and removed datasets are reported with a non-zero exit. Working directories are disposable: missing clones are cloned from the platform, and remotes enabled there are reported as local setup, not as project changes.
 
 ### D14. Indexing receives, it does not fetch
 `faire index <stream> <dir>` loads `.faire/heuristic.py` from the stream (functions `instrument`, `entities`, `place`, `pilot`), saves, pushes content before history to `dev` or `pilot`. Fetching from PACS, XNAT or an ELN is a site script run before `index` by a scheduled job. An undeclared instrument fails indexing. Experimenter notes are an ordinary stream; their conversion extracts the shareable fields.
