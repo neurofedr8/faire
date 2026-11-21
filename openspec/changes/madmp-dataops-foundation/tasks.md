@@ -60,9 +60,9 @@
 
 - [x] 9.1 `faire sync --stage` with `wanted`, credentials from environment, resumability; verify accepted, excluded-content and interrupted scenarios with local remotes
 - [x] 9.2 Release remote creation inferred from URL (RIA, plain, `datalad-annex`, GitLab via adapter); verify first-use creation for RIA and plain siblings
-- [ ] 9.3 `faire release` on `rel/*` (pointer bump, ancestry, completeness report, release checks, sync, reachability) and tagging on merge to `main`; verify each release scenario and that no tag exists on failure
-- [ ] 9.4 Verify a released tree installs from release remotes with the platform unreachable
-- [ ] 9.5 Document stages, branches and release in `docs/lifecycle.md`
+- [x] 9.3 `faire release` on `rel/*` (pointer bump, ancestry, completeness report, release checks, sync, reachability) and tagging on merge to `main`; verify each release scenario and that no tag exists on failure
+- [x] 9.4 Verify a released tree installs from release remotes with the platform unreachable
+- [x] 9.5 Document stages, branches and release in `docs/lifecycle.md`
 
 ## 10. Integration
 

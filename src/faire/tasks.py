@@ -326,11 +326,18 @@ class Pipeline:
 
 
 def pipeline(ds: Dataset, branch: str, stage: str = "collection",
-             downstream: tuple[str, ...] = (), sync: bool = False) -> Pipeline:
+             downstream: tuple[str, ...] = (), sync: bool = False,
+             superdataset: bool = False) -> Pipeline:
     """The pipeline of ``branch``: ``update`` on ``base``; sync and downstream triggers on
     ``dev`` (pilots do not cascade); tasks then status, or checks when nothing is due, on a
-    session branch; nothing elsewhere."""
+    session branch; release on the superdataset's ``rel/*`` and tagging on its ``main``;
+    nothing elsewhere."""
     from faire import lifecycle as L
+
+    if superdataset and branch.startswith("rel/"):
+        return Pipeline(jobs=[("release", "faire release")])
+    if superdataset and branch == "main":
+        return Pipeline(jobs=[("tag", "faire release --tag")])
 
     if branch == BASE:
         return Pipeline(jobs=[("update", "faire run --task update")])

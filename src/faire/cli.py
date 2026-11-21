@@ -180,14 +180,15 @@ def plan_cmd(dataset_path, ci_render, stage, project_path) -> None:
     branch = ds.repo.get_active_branch() or os.environ.get("CI_COMMIT_REF_NAME", "")
     plan, unit = _dataset_plan(ds)
     downstream: tuple[str, ...] = ()
-    sync = False
+    sync = superdataset = False
     if plan and unit:
+        superdataset = unit.is_superdataset
         targets = [layout.logical_path(d) for d in plan.derived_from(unit.dataset.id)]
         downstream = (T.downstream_paths(project_path, unit.logical, targets)
                       if project_path else tuple(targets))
         sync = bool(unit.dataset.distributions_at("accepted"))
     try:
-        pipe = T.pipeline(ds, branch, stage, downstream, sync)
+        pipe = T.pipeline(ds, branch, stage, downstream, sync, superdataset)
     except T.TaskError as exc:
         raise click.ClickException(str(exc)) from exc
     if ci_render == "gitlab":
@@ -369,3 +370,30 @@ def sync_cmd(stage, dmp_file, dataset_path, only, refs) -> None:
             click.echo(line)
     except SyncError as exc:
         raise click.ClickException(str(exc)) from exc
+
+
+@main.command("release")
+@click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
+@click.option("--tag", "do_tag", is_flag=True,
+              help="On main after the release merge: tag and push the tags.")
+def release_cmd(dataset_path, do_tag) -> None:
+    """Release the study from the superdataset's rel/<version> branch."""
+    from faire import release as R
+
+    ds = _dataset(dataset_path)
+    plan, unit = _dataset_plan(ds)
+    if plan is None or unit is None or not unit.is_superdataset:
+        raise click.ClickException("run release in a clone of the superdataset")
+    try:
+        if do_tag:
+            lines = R.tag(ds, plan)
+        else:
+            try:
+                platform, repo = _platform_from_env()
+            except click.ClickException:
+                platform = repo = None
+            lines = R.release(ds, plan, platform, repo)
+    except R.ReleaseError as exc:
+        raise click.ClickException(str(exc)) from exc
+    for line in lines:
+        click.echo(line)

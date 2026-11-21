@@ -70,7 +70,8 @@ def sync(plan: Plan, ds: Dataset, stage: str, refs: list[str], only: str | None 
             remotes.verify(ds, target)
         copied = 0
         if ds.config.get(f"remote.{target}.annex-ignore") != "true":
-            out = ds.repo.call_annex(["copy", "--auto", "--to", target, "."])
+            # from anywhere: a CI clone holds no content; copies go through it
+            out = ds.repo.call_annex(["copy", "--auto", "--from-anywhere", "--to", target, "."])
             copied = sum(1 for line in out.splitlines()  # "(to x...)": a real transfer
                          if line.startswith("copy ") and "(to " in line)
         if ds.config.get(f"remote.{spec.name}.url"):  # a git remote, not storage only
