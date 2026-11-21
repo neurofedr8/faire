@@ -67,4 +67,4 @@
 ## 10. Integration
 
 - [x] 10.1 End-to-end local run on the example ma-DMP with the fake platform: init, index two streams at different times, plan/run waves, mark, merge, cascade to a derivative, release; verify final tags and remote contents
-- [ ] 10.2 End-to-end on a GitLab test instance using rendered pipelines; verify one session reaches a release tag
+- [x] 10.2 End-to-end on a GitLab test instance using rendered pipelines; verify one session reaches a release tag

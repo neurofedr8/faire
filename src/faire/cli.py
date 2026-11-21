@@ -12,8 +12,18 @@ from faire.validate import validate
 
 @click.group()
 @click.version_option(__version__)
-def main() -> None:
+@click.pass_context
+def main(ctx) -> None:
     """Act on a machine-actionable DMP: create, index, process, distribute, release."""
+    import os
+
+    # In GitLab CI the job token cannot push: git authenticates with FAIRE_GITLAB_TOKEN
+    # through an in-process credential helper (never written to disk or to remote URLs).
+    url, token = os.environ.get("CI_SERVER_URL"), os.environ.get("FAIRE_GITLAB_TOKEN")
+    if os.environ.get("GITLAB_CI") and url and token:
+        from faire.platform import credentials
+
+        ctx.with_resource(credentials.git_auth(url, token))
 
 
 @main.command("validate")
@@ -138,8 +148,21 @@ def index_cmd(stream, directory, dmp_file, workdir, platform_kind, group, platfo
 
 
 def _dataset(path: str):
+    """The dataset at ``path``. A CI checkout is a plain git clone: git-annex is initialized
+    there when origin has a git-annex branch."""
     from datalad.api import Dataset
+    from datalad.runner.exception import CommandError
+    from datalad.support.annexrepo import AnnexRepo
 
+    ds = Dataset(path)
+    if ds.repo is None or isinstance(ds.repo, AnnexRepo):
+        return ds
+    try:
+        ds.repo.call_git(["fetch", "-q", "origin",
+                          "+refs/heads/git-annex:refs/remotes/origin/git-annex"])
+    except CommandError:
+        return ds  # not an annex dataset
+    AnnexRepo(ds.path, create=False, init=True)
     return Dataset(path)
 
 

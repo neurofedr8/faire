@@ -313,6 +313,24 @@ def _job(prefix: str, name: str) -> str:
     return prefix + re.sub(r"[^A-Za-z0-9_.-]+", "-", name)
 
 
+# Every job: optional site setup (e.g. installing faire on a stock image); the branch's latest
+# head checked out, tracking origin (CI checks out the pipeline's commit, detached; DataLad
+# resolves relative subdataset URLs against the branch's remote); origin and every URL of the
+# server without the job token (the runner rewrites them to it), which can neither push nor
+# read the project's other repositories. faire authenticates with FAIRE_GITLAB_TOKEN instead.
+BEFORE_SCRIPT = [
+    'sh -c "${FAIRE_SETUP:-true}"',
+    # the branch's latest head: jobs of a wave push one after the other
+    'git fetch -q origin "+refs/heads/$CI_COMMIT_REF_NAME:refs/remotes/origin/$CI_COMMIT_REF_NAME"',
+    'git checkout -B "$CI_COMMIT_REF_NAME" "refs/remotes/origin/$CI_COMMIT_REF_NAME"',
+    'git remote set-url origin "$CI_SERVER_URL/$CI_PROJECT_PATH.git"',
+    # wherever the rule is (system, global, local or an included file): remove it there
+    "git config --show-origin --name-only --get-regexp '^url\\..*\\.insteadof$' | "
+    'while read -r where key; do git config --file "${where#file:}" --unset-all "$key"; '
+    "done || true",  # get-regexp fails when nothing matches; CI shells use pipefail
+]
+
+
 @dataclass
 class Pipeline:
     """What a CI pipeline does on one branch."""
@@ -371,8 +389,7 @@ def render_gitlab(p: Pipeline) -> str:
     jobs: dict[str, dict] = {
         "stages": ["jobs", "tasks", "status", "checks", "downstream"],
         # CI checks out a detached commit; faire reads the session from the branch
-        "default": {"image": "$FAIRE_IMAGE", "before_script": [
-            'git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"']},
+        "default": {"image": "$FAIRE_IMAGE", "before_script": BEFORE_SCRIPT},
     }
     for name, command in p.jobs:
         jobs[_job("", name)] = {"stage": "jobs", "script": [command]}

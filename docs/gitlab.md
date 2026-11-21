@@ -42,10 +42,42 @@ run would do.
   pipelines derive distributions and the downstream projects to trigger. Re-running init
   updates it after an edit.
 
-Pipelines need a CI variable `FAIRE_IMAGE` (an image with faire installed) and
-`FAIRE_GITLAB_TOKEN` (opening merge requests, starting the next wave). A downstream trigger
-job runs as the user who started the pipeline, who needs the Developer role on the downstream
-project.
+## CI variables and jobs
+
+Set on the root group:
+
+| Variable | Purpose |
+|---|---|
+| `FAIRE_GITLAB_TOKEN` | masked; faire pushes, opens merge requests and starts pipelines with it (the job token can do none of these across projects) |
+| `FAIRE_IMAGE` | image running every job: one with faire, DataLad, datalad-container and git-annex, or a stock image plus `FAIRE_SETUP` |
+| `FAIRE_SETUP` | optional shell commands run first in every job, e.g. installing faire on `alpine:3` |
+
+Every job checks out the latest head of its branch (jobs of a wave push one after the other),
+resets `origin` to the project URL and removes the runner's `insteadOf` rules that rewrite
+server URLs to the job token, so subdatasets and pushes authenticate with
+`FAIRE_GITLAB_TOKEN` through an in-process credential helper. The templates' fixed
+`.gitlab-ci.yml` and the rendered child pipelines share these steps
+(`faire.tasks.BEFORE_SCRIPT`).
+
+Pushes that must not start work skip CI: init's pushes, task pushes within a wave, `update`'s
+pushes to `base`, `dev` and `pilot`, tags, and pushes to release repositories on the same
+server. Pushes that end a wave, open or update a session, or record a release start one.
+
+A downstream trigger job runs as the user who started the pipeline, who needs the Developer
+role on the downstream project. Approval rules need a paid tier; on the free tier faire skips
+them and merging relies on the passing pipeline and the reviewer.
+
+Release distributions may be GitLab projects (`https://<server>/<path>.git`): faire creates
+them on first use. They carry git only, so their `wanted` content must live in git.
+
+## Testing against a GitLab instance
+
+`tests/test_gitlab_live.py` runs one session from indexing to a release tag on a real GitLab
+with the rendered pipelines. Set `FAIRE_TEST_GITLAB_URL`, `FAIRE_TEST_GITLAB_TOKEN` (a group
+access token, Owner, `api` scope) and optionally `FAIRE_TEST_GITLAB_GROUP` (default
+`faire_dev`). It works in a new subgroup, pushes this working tree there for `FAIRE_SETUP` to
+install on `alpine:3`, and deletes the subgroup afterwards unless `FAIRE_TEST_KEEP` is set. A
+run takes about 30 minutes.
 
 When a new instrument is added to the ma-DMP, init creates its project and opens a merge request
 `faire/register-<stream>-<instance>` on every dataset derived from the stream.

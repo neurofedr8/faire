@@ -59,3 +59,14 @@ def test_tracked_dmp(project):
     for logical in ("sourcedata/dicoms/a_PrismaFit16001", "rawdata"):
         path = project.path(logical) / ".faire" / "dmp.json"
         assert not path.is_symlink() and path.read_bytes() == project.dmp_file.read_bytes()
+
+
+def test_ci_configuration_matches_rendered_jobs():
+    import yaml
+
+    from conftest import REFERENCE
+    from faire.tasks import BEFORE_SCRIPT
+
+    for name in ("standard", "stream", "superdataset"):
+        config = yaml.safe_load((REFERENCE / name / ".gitlab-ci.yml").read_text())
+        assert config["faire-plan"]["before_script"] == BEFORE_SCRIPT, name

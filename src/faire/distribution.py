@@ -90,7 +90,11 @@ def push_history(ds: Dataset, remote: str, refs: list[str]) -> None:
         ds.repo.call_annex(["merge"])
     except Exception:
         pass  # new remote without a git-annex branch yet
-    ds.repo.call_git(["push", "-q", "--no-verify", remote, *refs, "git-annex"])
+    url = ds.config.get(f"remote.{remote}.url") or ""
+    server = os.environ.get("CI_SERVER_URL")
+    # a release repository on the CI's own GitLab must not run the dataset's pipeline
+    skip = ["-o", "ci.skip"] if server and url.startswith(server) else []
+    ds.repo.call_git(["push", "-q", "--no-verify", *skip, remote, *refs, "git-annex"])
 
 
 def release_refs(tag: str) -> list[str]:

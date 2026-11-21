@@ -30,6 +30,7 @@ packages = ["src/faire"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["integration: runs against a live platform (opt-in through environment variables)"]
 
 [tool.ruff]
 line-length = 100

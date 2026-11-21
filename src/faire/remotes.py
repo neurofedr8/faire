@@ -113,9 +113,16 @@ def status(ds: Dataset, spec: RemoteSpec) -> str:
     if spec.name not in ds.repo.get_remotes():
         return "disabled" if spec.name in special_names(ds) else "missing"
     target = content_target(ds, spec.name)
+    if _git_only(ds, target):
+        return "ok"
     if ds.repo.get_preferred_content("wanted", target) != spec.wanted:
         return "wanted-differs"
     return "ok"
+
+
+def _git_only(ds: Dataset, name: str) -> bool:
+    """A remote holding no annexed content (a forge repository)."""
+    return ds.config.get(f"remote.{name}.annex-ignore") == "true"
 
 
 def create(ds: Dataset, spec: RemoteSpec, storage_only: bool = True, platform=None) -> None:
@@ -145,6 +152,8 @@ def create(ds: Dataset, spec: RemoteSpec, storage_only: bool = True, platform=No
             elif k == "platform":
                 platform.ensure_repository(repo_path(spec.url))
                 ds.siblings("add", name=spec.name, url=spec.url, result_renderer="disabled")
+                # forges carry git only: annexed content needs a storage distribution
+                ds.config.set(f"remote.{spec.name}.annex-ignore", "true", scope="local")
             elif k == "datalad-annex":
                 raise RemoteError(
                     f"{spec.name}: datalad-annex:: URLs need the datalad-next extension"
@@ -155,7 +164,9 @@ def create(ds: Dataset, spec: RemoteSpec, storage_only: bool = True, platform=No
             raise
         except Exception as exc:
             raise RemoteError(f"cannot create remote {spec.name} at {spec.url}: {exc}") from exc
-    ds.repo.set_preferred_content("wanted", spec.wanted, remote=content_target(ds, spec.name))
+    target = content_target(ds, spec.name)
+    if not _git_only(ds, target):
+        ds.repo.set_preferred_content("wanted", spec.wanted, remote=target)
 
 
 def verify(ds: Dataset, name: str) -> None:

@@ -102,6 +102,7 @@ def _release_url(plan: Plan, ds: Dataset) -> str | None:
             return f"{url}#{ds.id}"
         if remotes.kind(url, None) == "plain":
             return remotes.plain_target(url)
+        return url
     return None
 
 
@@ -228,8 +229,9 @@ def release(sup: Dataset, plan: Plan, platform=None, repository=None) -> list[st
     errors = unreachable(plan, sup, found, ref)
     if errors:
         raise ReleaseError("\n".join(errors))
-    skip = ["-o", "ci.skip"] if os.environ.get("GITLAB_CI") else []
-    sup.repo.call_git(["push", "-q", "--no-verify", *skip, "origin", f"HEAD:{ref}"])
+    # starts a pipeline: it re-runs the release (a no-op now) so that the head of the pull
+    # request has a passing pipeline
+    sup.repo.call_git(["push", "-q", "--no-verify", "origin", f"HEAD:{ref}"])
     if platform:
         platform.ensure_pull_request(repository, branch, "main", f"Release {version}",
                                      "\n".join(lines) or f"Release {version}.")
@@ -265,7 +267,9 @@ def tag(sup: Dataset, plan: Plan) -> list[str]:
     for ds, commit in _all(sup, found):
         if not _has_tag(ds, version):
             ds.repo.call_git(["tag", "-a", "-m", f"Release {version}", version, commit])
-        ds.repo.call_git(["push", "-q", "--no-verify", _home(sup, ds), f"refs/tags/{version}"])
+        skip = ["-o", "ci.skip"] if os.environ.get("GITLAB_CI") else []  # tags run nothing
+        ds.repo.call_git(["push", "-q", "--no-verify", *skip, _home(sup, ds),
+                          f"refs/tags/{version}"])
         for t in targets(plan, ds, "release"):
             if ds.config.get(f"remote.{t.spec.name}.url"):
                 push_history(ds, t.spec.name, release_refs(version))

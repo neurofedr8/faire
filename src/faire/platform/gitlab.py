@@ -113,14 +113,19 @@ class GitLabPlatform(Platform):
         project.squash_option = "never"
         try:
             project.save()
-            if approvals:
-                names = {r.name for r in project.approvalrules.list(get_all=True)}
-                if APPROVAL_RULE not in names:
-                    project.approvalrules.create(
-                        {"name": APPROVAL_RULE, "approvals_required": approvals}
-                    )
         except gle.GitlabError as exc:
             raise self._wrap(exc) from exc
+        if not approvals:
+            return
+        try:
+            names = {r.name for r in project.approvalrules.list(get_all=True)}
+            if APPROVAL_RULE not in names:
+                project.approvalrules.create(
+                    {"name": APPROVAL_RULE, "approvals_required": approvals}
+                )
+        except gle.GitlabError as exc:
+            if exc.response_code not in (403, 404):  # approval rules need a paid tier
+                raise self._wrap(exc) from exc
 
     def set_variable(self, repo: Repository, key: str, value: str) -> None:
         project = self._project(repo)

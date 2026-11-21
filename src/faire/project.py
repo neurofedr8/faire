@@ -11,6 +11,7 @@ import os
 import shutil
 import tempfile
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
@@ -85,6 +86,10 @@ class Project:
     # -- entry point -------------------------------------------------------------------------
 
     def init(self, dry_run: bool = False) -> Report:
+        with self.platform.git_auth() if self.platform else nullcontext():
+            return self._init(dry_run)
+
+    def _init(self, dry_run: bool) -> Report:
         report = Report()
         todo: list[tuple[str, Callable[[], None]]] = []
         setup: list[tuple[str, Callable[[], None]]] = []
@@ -270,8 +275,9 @@ class Project:
         repo = platform.ensure_repository(self.location(unit))
         if "origin" not in ds.repo.get_remotes():
             ds.repo.call_git(["remote", "add", "origin", repo.url])
+        skip = ["-o", "ci.skip"] if platform.name == "gitlab" else []  # creating starts nothing
         with platform.git_auth():
-            ds.repo.call_git(["push", "origin", *branches, "git-annex"])
+            ds.repo.call_git(["push", *skip, "origin", *branches, "git-annex"])
         for pattern in (SUPERDATASET_PROTECTED if unit.is_superdataset
                         else STREAM_BRANCHES if unit.instrument else PROTECTED):
             platform.protect_branch(repo, pattern)

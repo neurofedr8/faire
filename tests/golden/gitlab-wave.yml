@@ -7,7 +7,13 @@ stages:
 default:
   image: $FAIRE_IMAGE
   before_script:
-  - git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"
+  - sh -c "${FAIRE_SETUP:-true}"
+  - git fetch -q origin "+refs/heads/$CI_COMMIT_REF_NAME:refs/remotes/origin/$CI_COMMIT_REF_NAME"
+  - git checkout -B "$CI_COMMIT_REF_NAME" "refs/remotes/origin/$CI_COMMIT_REF_NAME"
+  - git remote set-url origin "$CI_SERVER_URL/$CI_PROJECT_PATH.git"
+  - git config --show-origin --name-only --get-regexp '^url\..*\.insteadof$' | while
+    read -r where key; do git config --file "${where#file:}" --unset-all "$key"; done
+    || true
 task-unwarp-s:
   stage: tasks
   script:
