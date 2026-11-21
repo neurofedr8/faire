@@ -44,10 +44,10 @@
 
 ## 7. Lifecycle
 
-- [ ] 7.1 Downstream trigger: create session branches and draft pull requests, bump pending streams on open branches; verify new-session and late-stream scenarios with the fake platform
-- [ ] 7.2 `faire status` writing `sessions.tsv`/`participants.tsv` and sidecar levels as a recorded step; built-in completeness check; verify status and pending scenarios
-- [ ] 7.3 `faire mark` (partial vs missing, reviewer recorded) and the rendered manual job; verify the partial-physio scenario
-- [ ] 7.4 Pilot base branch through trigger, branch creation and pull request target; verify pilot isolation
+- [x] 7.1 Downstream trigger: create session branches and draft pull requests, bump pending streams on open branches; verify new-session and late-stream scenarios with the fake platform
+- [x] 7.2 `faire status` writing `sessions.tsv`/`participants.tsv` and sidecar levels as a recorded step; built-in completeness check; verify status and pending scenarios
+- [x] 7.3 `faire mark` (partial vs missing, reviewer recorded) and the rendered manual job; verify the partial-physio scenario
+- [x] 7.4 Pilot base branch through trigger, branch creation and pull request target; verify pilot isolation
 
 ## 8. Distribution and release
 

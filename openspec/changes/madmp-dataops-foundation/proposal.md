@@ -8,7 +8,7 @@ Research projects using DataLad still wire up datasets, provenance, containers, 
 - A **`faire` tool** with a few commands:
   - `validate` and `init`: create every dataset from its template, link sources as `sourcedata/` subdatasets, create storage remotes and platform repositories, and render the study superdataset from its own template; re-running applies additive edits.
   - `index`: add received raw files to a sourcedata stream, guided by a heuristic versioned in that stream.
-  - `plan`, `run`, `test`, `mark`, `status`: processing rules and checks declared as DataLad container entries; one branch and pull request per session; secondary streams and in-place tools commit to that branch, in parallel; a per-session status table blocks merging until every stream is converted or waived by a reviewer.
+  - `plan`, `run`, `test`, `mark`, `status`, `sessions`, `trigger`, `replan`: processing rules and checks declared as DataLad container entries; one branch and pull request per session; secondary streams and in-place tools commit to that branch, in parallel; a per-session status table blocks merging until every stream is converted or waived by a reviewer.
   - `sync` and `release`: push to the distributions of a stage; release from a `rel/x.y.z` branch of the superdataset, tagged only once data is reachable.
 - **CI integration** through `plan --ci-render gitlab|github`, with GitLab as the reference platform and a single-job fallback.
 

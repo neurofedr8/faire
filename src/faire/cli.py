@@ -150,14 +150,24 @@ def _dataset(path: str):
 @click.option("--stage", default="collection", help="Stage whose checks the pipeline runs.")
 def plan_cmd(dataset_path, ci_render, stage) -> None:
     """List the due tasks of the current session branch."""
+    from faire import lifecycle as L
     from faire import tasks as T
+    from faire.rules import Check
+    from faire.state import sample_of
 
     ds = _dataset(dataset_path)
     found = T.plan(ds)
+    checks = T.check_list(ds, stage)
+    branch = ds.repo.get_active_branch() or ""
+    label = sample_of(branch)
+    pending: tuple[str, ...] = ()
+    if label and stage == "collection":
+        checks.append(Check(L.COMPLETENESS, True, ("collection",), ""))
+        pending = tuple(s for s, v in L.compute(ds, label, branch).items() if v == L.PENDING)
     if ci_render == "gitlab":
-        click.echo(T.render_gitlab(found, T.check_list(ds, stage), stage), nl=False)
+        click.echo(T.render_gitlab(found, checks, stage, pending), nl=False)
     elif ci_render == "github":
-        click.echo(T.render_github(found, T.check_list(ds, stage)))
+        click.echo(T.render_github(found, checks))
     else:
         click.echo(T.as_json(found))
 
@@ -197,8 +207,16 @@ def test_cmd(dataset_path, stage, only) -> None:
     branch = ds.repo.get_active_branch() or ""
     sample = sample_of(branch)
     waived = _waived(ds, sample)
+    from faire import lifecycle as L
+
+    results = []
+    if sample and stage == "collection" and only in (None, L.COMPLETENESS):
+        ok, text = L.completeness(ds, sample)
+        results.append(T.CheckResult(L.COMPLETENESS, True, ok, text, []))
+    if only != L.COMPLETENESS:
+        results += T.run_checks(ds, stage, sample, only, waived)
     failed = False
-    for r in T.run_checks(ds, stage, sample, only, waived):
+    for r in results:
         verdict = "ok" if r.passed else ("FAILED" if r.blocking else "warning")
         click.echo(f"{r.name}: {verdict}")
         if r.output:
@@ -211,7 +229,9 @@ def test_cmd(dataset_path, stage, only) -> None:
 
 
 def _waived(ds, sample) -> tuple[str, ...]:
-    return ()
+    from faire.lifecycle import waived_patterns
+
+    return waived_patterns(ds, sample) if sample else ()
 
 
 def _platform_from_env():
@@ -240,4 +260,101 @@ def replan_cmd(dataset_path, since) -> None:
     try:
         click.echo(T.replan(_dataset(dataset_path), since, platform, repo))
     except T.TaskError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+@main.command("status")
+@click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
+@click.option("--write", is_flag=True,
+              help="Only write the table (the recorded step run by plain `faire status`).")
+@click.option("--no-push", is_flag=True)
+def status_cmd(dataset_path, write, no_push) -> None:
+    """Update the source-stream status of the current session's sample."""
+    from faire import lifecycle as L
+    from faire.state import sample_of
+
+    ds = _dataset(dataset_path)
+    branch = ds.repo.get_active_branch() or ""
+    label = sample_of(branch)
+    if label is None:
+        raise click.ClickException(f"{branch!r} is not a session branch")
+    if write:
+        L.write_status(ds, label, L.compute(ds, label, branch))
+        return
+    changed = L.record_status(ds, push=not no_push)
+    for stream, value in sorted(L.current(ds, label).items()):
+        click.echo(f"{stream}: {value}")
+    if not changed:
+        click.echo("no change")
+
+
+@main.command("mark")
+@click.argument("assignment", metavar="STREAM=missing")
+@click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
+@click.option("--by", help="Who declares it (default: the CI user).")
+@click.option("--no-push", is_flag=True)
+def mark_cmd(assignment, dataset_path, by, no_push) -> None:
+    """Declare a source stream absent for the current session (missing or partial)."""
+    from faire import lifecycle as L
+
+    stream, _, value = assignment.partition("=")
+    if value != "missing":
+        raise click.UsageError("use STREAM=missing")
+    try:
+        result = L.mark(_dataset(dataset_path), stream, by or L.reviewer(), push=not no_push)
+    except L.LifecycleError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"{stream}: {result}")
+
+
+@main.command("sessions")
+@click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
+def sessions_cmd(dataset_path) -> None:
+    """Open session branches for new samples and bring newly arrived streams to open ones."""
+    from faire import lifecycle as L
+
+    try:
+        platform, repo = _platform_from_env()
+    except click.ClickException:
+        platform = repo = None
+    for line in L.sessions(_dataset(dataset_path), platform, repo):
+        click.echo(line)
+
+
+@main.command("trigger")
+@click.option("--downstream", envvar="FAIRE_DOWNSTREAM", default="",
+              help="Comma-separated repositories (default: FAIRE_DOWNSTREAM).")
+@click.option("--ref", envvar="CI_COMMIT_REF_NAME", default="dev")
+def trigger_cmd(downstream, ref) -> None:
+    """Start the pipelines of the datasets derived from this one."""
+    import os
+
+    from faire import lifecycle as L
+
+    platform, _ = _platform_from_env()
+    for line in L.trigger(downstream, ref, platform, os.environ.get("CI_PROJECT_PATH", "")):
+        click.echo(line)
+
+
+@main.command("sync")
+@click.option("--stage", required=True, type=click.Choice(["collection", "accepted", "release"]))
+@click.option("--dmp", "dmp_file", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
+@click.option("--distribution", "only", help="Only the distribution with this title.")
+@click.option("--ref", "refs", multiple=True,
+              help="Branches or tags to push (default: the checked-out branch).")
+def sync_cmd(stage, dmp_file, dataset_path, only, refs) -> None:
+    """Push to the dataset's distributions bound to STAGE."""
+    from faire.distribution import SyncError, sync
+    from faire.plan import Plan
+
+    doc = load_document(dmp_file)
+    if validate(doc):
+        raise click.ClickException("the ma-DMP is not valid")
+    ds = _dataset(dataset_path)
+    refs = list(refs) or [ds.repo.get_active_branch()]
+    try:
+        for line in sync(Plan.from_document(doc), ds, stage, refs, only):
+            click.echo(line)
+    except SyncError as exc:
         raise click.ClickException(str(exc)) from exc

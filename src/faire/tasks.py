@@ -19,6 +19,7 @@ from datalad.api import Dataset
 from datalad.runner.exception import CommandError
 
 from faire import remotes
+from faire.branches import checkout_sources
 from faire.containers import entries, get_image
 from faire.rules import Check, expand, load
 from faire.state import (
@@ -115,6 +116,7 @@ def run_task(ds: Dataset, task_id: str, push: bool = True) -> str:
         raise TaskError(f"no rule {name!r} in this dataset")
     rule = rules[name]
     branch = active_branch(ds)
+    checkout_sources(ds)
     state = rule_state(ds, rules, rule, label, branch)
     if not state.present:
         return "no-inputs"
@@ -158,11 +160,13 @@ def run_all(ds: Dataset, push: bool = True, max_waves: int = 20) -> list[str]:
 
 def publish(ds: Dataset, branch: str) -> None:
     """Content to the collection remotes, then merge the remote branch and push, with retries."""
+    remotes.verify_all(ds)
     for name in sorted(remotes.special_names(ds) | set(ds.repo.get_remotes())):
         if not name.startswith(COLLECTION_PREFIX):
             continue
         if name not in ds.repo.get_remotes():
             ds.repo.enable_remote(name)
+            remotes.verify(ds, name)
         ds.push(to=name, data="auto-if-wanted", result_renderer="disabled")
     options = ["-o", "ci.skip"] if os.environ.get("GITLAB_CI") else []
     for attempt in range(PUSH_RETRIES):
@@ -254,6 +258,7 @@ def run_checks(ds: Dataset, stage: str, sample: str | None = None, only: str | N
                waived: tuple[str, ...] = ()) -> list[CheckResult]:
     """Run the checks of ``stage``; a check must leave the worktree unchanged."""
     _, checks = load(ds)
+    checkout_sources(ds)
     selected = [c for c in checks.values() if stage in c.stages and (only in (None, c.name))]
     if only and not selected:
         raise TaskError(f"no check {only!r} for stage {stage!r}")
@@ -292,8 +297,10 @@ def _job(prefix: str, name: str) -> str:
     return prefix + re.sub(r"[^A-Za-z0-9_.-]+", "-", name)
 
 
-def render_gitlab(tasks: list[Task], checks: list[Check], stage: str) -> str:
-    """A GitLab child pipeline: tasks (ordered by needs), status, checks, replan."""
+def render_gitlab(tasks: list[Task], checks: list[Check], stage: str,
+                  pending: tuple[str, ...] = ()) -> str:
+    """A GitLab child pipeline: tasks (ordered by needs), status, checks, replan, and a manual
+    job per pending stream through which a reviewer declares it absent."""
     jobs: dict[str, dict] = {"stages": ["tasks", "status", "checks", "replan"]}
     for t in tasks:
         job: dict = {"stage": "tasks", "script": [f"faire run --task '{t.id}'"],
@@ -310,6 +317,11 @@ def render_gitlab(tasks: list[Task], checks: list[Check], stage: str) -> str:
         if c.runner:
             job["tags"] = [c.runner]
         jobs[_job("check-", c.name)] = job
+    for stream in pending:
+        jobs[_job("mark-missing-", stream)] = {
+            "stage": "checks", "script": [f"faire mark '{stream}=missing'"], "needs": ["status"],
+            "when": "manual", "allow_failure": True,
+        }
     jobs["replan"] = {"stage": "replan", "script": ["faire replan"],
                       "needs": ["status", *[_job("check-", c.name) for c in checks]]}
     return yaml.safe_dump(jobs, sort_keys=False)

@@ -67,8 +67,10 @@ def merge(ds: Dataset, rendered: Path) -> None:
         else:
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest)
+    # last rules win: keep git's own files and the answers file out of the annex whatever
+    # the template says
     attrs = root / ".gitattributes"
-    rule = f"{ANSWERS_FILE} annex.largefiles=nothing\n"
     text = attrs.read_text() if attrs.exists() else ""
-    if rule not in text:
-        attrs.write_text(text.rstrip("\n") + ("\n" if text else "") + rule)
+    for rule in ("**/.git* annex.largefiles=nothing", f"{ANSWERS_FILE} annex.largefiles=nothing"):
+        text = text.rstrip("\n") + ("\n" if text else "") + rule + "\n"
+    attrs.write_text(text)

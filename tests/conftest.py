@@ -6,6 +6,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,8 @@ _GITCONFIG = Path(tempfile.mkdtemp(prefix="faire-tests-")) / "gitconfig"
 _GITCONFIG.write_text("[user]\n\tname = faire tests\n\temail = tests@example.org\n"
                       "[init]\n\tdefaultBranch = main\n")
 os.environ["GIT_CONFIG_GLOBAL"] = str(_GITCONFIG)
+# recorded steps call `faire` itself
+os.environ["PATH"] = str(Path(sys.executable).parent) + os.pathsep + os.environ["PATH"]
 
 ANSWERS = "{{ _copier_answers|to_nice_yaml }}"
 GITATTRIBUTES = "* annex.largefiles=(not(mimetype=text/*))\n"

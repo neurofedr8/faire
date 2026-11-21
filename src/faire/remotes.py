@@ -55,15 +55,38 @@ def specs(distributions: Iterable[Distribution], instance: str | None = None) ->
     return out
 
 
-def kind(url: str) -> str:
+FORGES = {"gin.g-node.org": "gin"}
+CREDENTIALS = {"gin": "DATALAD_CREDENTIAL_GIN_TOKEN", "platform": "FAIRE_GITLAB_TOKEN"}
+
+
+def kind(url: str, platform_host: str | None = None) -> str:
+    """How a remote at ``url`` is created: ria, plain, gin, platform, datalad-annex, existing."""
     if url.startswith("ria+"):
         return "ria"
     if url.startswith("datalad-annex::"):
         return "datalad-annex"
+    host = host_of(url)
+    if host in FORGES:
+        return FORGES[host]
+    if platform_host and host == platform_host:
+        return "platform"
     scheme = urlsplit(url).scheme
     if scheme in ("", "file", "ssh") or re.match(r"^[\w.-]+@?[\w.-]*:[^/]", url):
         return "plain"
     return "existing"
+
+
+def host_of(url: str) -> str | None:
+    if "://" in url:
+        return urlsplit(url).hostname
+    found = re.match(r"^(?:[\w.-]+@)?([\w.-]+):", url)  # scp-like user@host:path
+    return found.group(1) if found else None
+
+
+def repo_path(url: str) -> str:
+    """``org/name`` of a repository URL (scheme or scp-like), without ``.git``."""
+    path = urlsplit(url).path if "://" in url else url.split(":", 1)[1]
+    return path.strip("/").removesuffix(".git")
 
 
 def plain_target(url: str) -> str:
@@ -76,22 +99,35 @@ def special_names(ds: Dataset) -> set[str]:
     return {r.get("name") for r in ds.repo.get_special_remotes().values()}
 
 
+def content_target(ds: Dataset, name: str) -> str:
+    """Remote receiving annexed content: a RIA sibling's storage part, else the remote."""
+    storage = f"{name}-storage"
+    if storage in ds.repo.get_remotes() or storage in special_names(ds):
+        return storage
+    return name
+
+
 def status(ds: Dataset, spec: RemoteSpec) -> str:
     """``missing``, ``disabled`` (known to git-annex, not enabled here), ``wanted-differs``
     or ``ok``."""
     if spec.name not in ds.repo.get_remotes():
         return "disabled" if spec.name in special_names(ds) else "missing"
-    if ds.repo.get_preferred_content("wanted", spec.name) != spec.wanted:
+    target = content_target(ds, spec.name)
+    if ds.repo.get_preferred_content("wanted", target) != spec.wanted:
         return "wanted-differs"
     return "ok"
 
 
-def create(ds: Dataset, spec: RemoteSpec, storage_only: bool = True) -> None:
-    """Create (or enable) the remote if missing and set its wanted expression."""
+def create(ds: Dataset, spec: RemoteSpec, storage_only: bool = True, platform=None) -> None:
+    """Create (or enable) the remote if missing and set its wanted expression.
+
+    ``storage_only`` applies to RIA stores: early stages keep git history on the platform.
+    """
     if spec.name not in ds.repo.get_remotes() and spec.name in special_names(ds):
         ds.repo.enable_remote(spec.name)
     elif spec.name not in ds.repo.get_remotes():
-        k = kind(spec.url)
+        platform_host = host_of(platform.url) if platform and hasattr(platform, "url") else None
+        k = kind(spec.url, platform_host)
         try:
             if k == "ria":
                 ds.create_sibling_ria(
@@ -102,6 +138,12 @@ def create(ds: Dataset, spec: RemoteSpec, storage_only: bool = True) -> None:
             elif k == "plain":
                 ds.create_sibling(plain_target(spec.url), name=spec.name,
                                   existing="reconfigure", result_renderer="disabled")
+            elif k == "gin":
+                ds.create_sibling_gin(repo_path(spec.url), name=spec.name, existing="skip",
+                                      access_protocol="ssh", result_renderer="disabled")
+            elif k == "platform":
+                platform.ensure_repository(repo_path(spec.url))
+                ds.siblings("add", name=spec.name, url=spec.url, result_renderer="disabled")
             elif k == "datalad-annex":
                 raise RemoteError(
                     f"{spec.name}: datalad-annex:: URLs need the datalad-next extension"
@@ -112,4 +154,34 @@ def create(ds: Dataset, spec: RemoteSpec, storage_only: bool = True) -> None:
             raise
         except Exception as exc:
             raise RemoteError(f"cannot create remote {spec.name} at {spec.url}: {exc}") from exc
-    ds.repo.set_preferred_content("wanted", spec.wanted, remote=spec.name)
+    ds.repo.set_preferred_content("wanted", spec.wanted, remote=content_target(ds, spec.name))
+
+
+def verify(ds: Dataset, name: str) -> None:
+    """Confirm a special remote's configuration as safe to git-annex.
+
+    Recent git-annex refuses to write to a special remote enabled in a fresh clone until it is
+    verified. faire does this only for the remotes it created from the ma-DMP, whose
+    configuration comes from the dataset's (protected) git-annex branch.
+    """
+    try:
+        out = ds.repo.call_annex(["verifyremote", name])
+    except Exception as exc:  # unknown command (older git-annex): nothing to verify
+        out = str(exc)
+    found = re.search(r"--safe (\S+)", out)
+    if found:
+        ds.repo.call_annex(["verifyremote", name, "--safe", found.group(1)])
+
+
+STAGE_PREFIXES = ("collection-", "accepted-", "release-")
+
+
+def verify_all(ds: Dataset) -> None:
+    """Verify every special remote faire created (named after its stage).
+
+    git-annex refuses writes in a repository where any auto-enabled special remote is
+    unverified, so this is needed before any transfer from a fresh clone.
+    """
+    for name in sorted(special_names(ds)):
+        if name and name.startswith(STAGE_PREFIXES):
+            verify(ds, name)
