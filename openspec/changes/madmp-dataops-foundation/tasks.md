@@ -51,8 +51,8 @@
 
 ## 8. Distribution and release
 
-- [ ] 8.1 `faire sync --stage` with `wanted`, credentials from environment, resumability; verify accepted, excluded-content and interrupted scenarios with local remotes
-- [ ] 8.2 Release remote creation inferred from URL (RIA, plain, `datalad-annex`, GitLab via adapter); verify first-use creation for RIA and plain siblings
+- [x] 8.1 `faire sync --stage` with `wanted`, credentials from environment, resumability; verify accepted, excluded-content and interrupted scenarios with local remotes
+- [x] 8.2 Release remote creation inferred from URL (RIA, plain, `datalad-annex`, GitLab via adapter); verify first-use creation for RIA and plain siblings
 - [ ] 8.3 `faire release` on `rel/*` (pointer bump, ancestry, completeness report, release checks, sync, reachability) and tagging on merge to `main`; verify each release scenario and that no tag exists on failure
 - [ ] 8.4 Verify a released tree installs from release remotes with the platform unreachable
 - [ ] 8.5 Document stages, branches and release in `docs/lifecycle.md`
