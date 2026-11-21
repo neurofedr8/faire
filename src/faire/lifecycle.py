@@ -167,6 +167,12 @@ def compute(ds: Dataset, label: str, branch: str) -> dict[str, str]:
 def write_status(ds: Dataset, label: str, values: dict[str, str]) -> list[str]:
     """Write the sample's row and the sidecar; return the paths written."""
     spec = table_spec(ds, label)
+    for path in (spec.path, spec.sidecar):  # annexed by the template: get, then replace
+        if (Path(ds.path) / path).is_symlink():
+            ds.get(path, result_renderer="disabled")
+            text = (Path(ds.path) / path).read_bytes()
+            (Path(ds.path) / path).unlink()
+            (Path(ds.path) / path).write_bytes(text)
     rows = [r for r in read_rows(ds, spec.path) if r.get(spec.key) != spec.value]
     previous = current(ds, label)
     rows.append({spec.key: spec.value, **previous, **values})

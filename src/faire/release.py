@@ -11,7 +11,10 @@ superdataset and every dataset at its released commit, and push the tags.
 
 from __future__ import annotations
 
+import os
+import posixpath
 from dataclasses import dataclass
+from pathlib import Path
 
 from datalad.api import Dataset
 from datalad.runner.exception import CommandError
@@ -166,8 +169,23 @@ def unreachable(plan: Plan, sup: Dataset, found: list[Member], ref: str,
     for ds, commit in _all(sup, found, head):
         ident = ds.config.get(DATASET_ID)
         for t in targets(plan, ds, "release"):
+            _attach(ds, t)
             errors += _missing(ds, ident, t, commit, ref)
     return errors
+
+
+def _attach(ds: Dataset, t: Target) -> None:
+    """Configure a release remote in this clone and learn what it holds."""
+    if remotes.status(ds, t.spec) != "ok":
+        remotes.create(ds, t.spec, storage_only=False)
+    name = t.spec.name
+    if ds.config.get(f"remote.{name}.url"):
+        try:
+            ds.repo.call_git(["fetch", "-q", name,
+                              f"+refs/heads/git-annex:refs/remotes/{name}/git-annex"])
+            ds.repo.call_annex(["merge"])
+        except CommandError:
+            pass  # nothing pushed there yet
 
 
 def _missing(ds: Dataset, ident: str, t: Target, commit: str, ref: str) -> list[str]:
@@ -210,7 +228,8 @@ def release(sup: Dataset, plan: Plan, platform=None, repository=None) -> list[st
     errors = unreachable(plan, sup, found, ref)
     if errors:
         raise ReleaseError("\n".join(errors))
-    sup.repo.call_git(["push", "-q", "--no-verify", "origin", f"HEAD:{ref}"])
+    skip = ["-o", "ci.skip"] if os.environ.get("GITLAB_CI") else []
+    sup.repo.call_git(["push", "-q", "--no-verify", *skip, "origin", f"HEAD:{ref}"])
     if platform:
         platform.ensure_pull_request(repository, branch, "main", f"Release {version}",
                                      "\n".join(lines) or f"Release {version}.")
@@ -230,8 +249,12 @@ def tag(sup: Dataset, plan: Plan) -> list[str]:
     superdataset, then push the tags (and ``main`` at the tag) to origin and release remotes."""
     version = released_version(sup)
     ref = f"{PREFIX}{version}"
-    sup.repo.call_git(["fetch", "-q", "origin", f"+refs/heads/{ref}:refs/remotes/origin/{ref}"])
-    released = f"refs/remotes/origin/{ref}"
+    try:
+        sup.repo.call_git(["fetch", "-q", "origin",
+                           f"+refs/heads/{ref}:refs/remotes/origin/{ref}"])
+        released = f"refs/remotes/origin/{ref}"
+    except CommandError:  # the branch was deleted with the merge: its head is merged in
+        released = "HEAD^2"
     if git(sup, "rev-parse", "HEAD^{tree}") != git(sup, "rev-parse", released + "^{tree}"):
         raise ReleaseError(f"main differs from the released {ref}; release again")
     found = members(sup)
@@ -242,12 +265,26 @@ def tag(sup: Dataset, plan: Plan) -> list[str]:
     for ds, commit in _all(sup, found):
         if not _has_tag(ds, version):
             ds.repo.call_git(["tag", "-a", "-m", f"Release {version}", version, commit])
-        ds.repo.call_git(["push", "-q", "--no-verify", "origin", f"refs/tags/{version}"])
+        ds.repo.call_git(["push", "-q", "--no-verify", _home(sup, ds), f"refs/tags/{version}"])
         for t in targets(plan, ds, "release"):
             if ds.config.get(f"remote.{t.spec.name}.url"):
                 push_history(ds, t.spec.name, release_refs(version))
         lines.append(f"tagged {ds.config.get(DATASET_ID)} {version} at {commit[:8]}")
     return lines
+
+
+def _home(sup: Dataset, ds: Dataset) -> str:
+    """Remote of ``ds`` on the platform: the superdataset's origin with the relative URL
+    recorded in `.gitmodules` (a subdataset may have been installed from a release remote)."""
+    if ds.path == sup.path:
+        return "origin"
+    path = Path(ds.path).relative_to(sup.path).as_posix()
+    rel = sup.repo.call_git(["config", "-f", ".gitmodules", f"submodule.{path}.url"]).strip()
+    if not rel.startswith("."):
+        return rel
+    base = sup.config.get("remote.origin.url")
+    scheme, sep, rest = base.rpartition("://")
+    return f"{scheme}{sep}{posixpath.normpath(posixpath.join(rest, rel))}"
 
 
 def _has_tag(ds: Dataset, name: str) -> bool:

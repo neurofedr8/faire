@@ -131,7 +131,8 @@ def create(ds: Dataset, spec: RemoteSpec, storage_only: bool = True, platform=No
         try:
             if k == "ria":
                 ds.create_sibling_ria(
-                    spec.url, name=spec.name, new_store_ok=True, existing="skip",
+                    # reconfigure: a fresh clone must get the remote of an existing entry
+                    spec.url, name=spec.name, new_store_ok=True, existing="reconfigure",
                     storage_sibling="only" if storage_only else True,
                     result_renderer="disabled",
                 )
