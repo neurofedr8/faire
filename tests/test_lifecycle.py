@@ -51,24 +51,33 @@ def on(ds, branch):
     return ds
 
 
+def files_vs_dev(ds, branch):
+    ds.repo.call_git(["fetch", "-q", "origin"])
+    out = ds.repo.call_git(["diff", "--name-only", "refs/remotes/origin/dev...refs/remotes/"
+                            f"origin/{branch}"])
+    return out.split()
+
+
 def test_new_session_opens_branch_and_draft(project, tmp_path, platform):
     fake, repo = platform
     mri(project, tmp_path, "01")
     ds = bids(project, tmp_path)
-    lines = L.sessions(ds, fake, repo)
+    lines = L.update(ds, fake, repo)
+    assert "updated sourcedata/dicoms/a_PrismaFit16001 on base" in lines
+    assert "merged base into dev" in lines and "merged base into pilot" in lines
     assert "opened convert/subject-01_session-a" in lines
     [pr] = fake.open_pull_requests(repo)
     assert (pr.source, pr.target, pr.draft) == ("convert/subject-01_session-a", "dev", True)
     origin = Dataset(project.path("rawdata"))
-    assert "convert/subject-01_session-a" in origin.repo.get_branches()
-    assert not any("opened" in line for line in L.sessions(ds, fake, repo))
+    assert origin.repo.get_hexsha("convert/subject-01_session-a") == origin.repo.get_hexsha("base")
+    assert not any("opened" in line for line in L.update(ds, fake, repo))
 
 
 def test_status_pending_completeness_and_late_streams(project, tmp_path):
     for subject in ("02", "03"):
         mri(project, tmp_path, subject)
     ds = bids(project, tmp_path)
-    L.sessions(ds)
+    L.update(ds)
     on(ds, "convert/subject-02_session-a")
     T.run_all(ds)
     assert L.record_status(ds)
@@ -81,18 +90,23 @@ def test_status_pending_completeness_and_late_streams(project, tmp_path):
     assert "faire-status: subject-02_session-a" in message and "faire status --write" in message
     ok, text = L.completeness(ds, "subject-02_session-a")
     assert not ok and "pending: physio" in text
-    # physio arrives: both waiting branches get it
+    # physio arrives: base moves and is merged into both waiting branches
     for subject in ("02", "03"):
         physio(project, tmp_path, subject)
     other = bids(project, tmp_path, "other")
-    lines = L.sessions(other)
-    assert "updated sourcedata/physio/a_Biopac01 on convert/subject-02_session-a" in lines
-    assert "updated sourcedata/physio/a_Biopac01 on convert/subject-03_session-a" in lines
+    lines = L.update(other)
+    assert "updated sourcedata/physio/a_Biopac01 on base" in lines
+    assert "merged base into convert/subject-02_session-a" in lines
+    assert "merged base into convert/subject-03_session-a" in lines
     on(ds, "convert/subject-02_session-a")
+    assert [t.id for t in T.plan(ds)] == ["merge-physio:subject-02_session-a"]
     T.run_all(ds)
     L.record_status(ds)
     assert L.current(ds, "subject-02_session-a")["physio"] == "present"
     assert L.completeness(ds, "subject-02_session-a")[0]
+    # the pull request shows only this sample's changes
+    changed = files_vs_dev(ds, "convert/subject-02_session-a")
+    assert changed and all(f.startswith("sub-02/") or f == "sessions.json" for f in changed)
 
 
 def test_mark_partial_and_missing(project, tmp_path):
@@ -100,7 +114,7 @@ def test_mark_partial_and_missing(project, tmp_path):
     physio(project, tmp_path, "04")
     mri(project, tmp_path, "05")
     ds = bids(project, tmp_path)
-    L.sessions(ds)
+    L.update(ds)
     on(ds, "convert/subject-04_session-a")
     T.run_all(ds)
     assert L.mark(ds, "physio", "reviewer") == "partial"
@@ -116,20 +130,41 @@ def test_mark_partial_and_missing(project, tmp_path):
     assert L.mark(ds, "physio", "reviewer") == "missing"
 
 
-@pytest.mark.xfail(reason="pilot sessions move to base in task 8.3", strict=True)
+def test_rule_fixed_and_merged_session(project, tmp_path):
+    mri(project, tmp_path, "06")
+    ds = bids(project, tmp_path)
+    L.update(ds)
+    on(ds, "convert/subject-06_session-a")
+    T.run_all(ds)
+    # a configuration change on base reaches the open session
+    on(ds, "base")
+    (Path(ds.path) / "CHANGES").write_text("rule fixed\n")
+    ds.save(path="CHANGES", to_git=True, message="fix a rule", result_renderer="disabled")
+    ds.repo.call_git(["push", "-q", "--no-verify", "origin", "base"])
+    assert "merged base into convert/subject-06_session-a" in L.update(ds)
+    on(ds, "convert/subject-06_session-a")
+    assert (Path(ds.path) / "CHANGES").exists()
+    # once merged into dev, the session is not opened again
+    on(ds, "dev")
+    ds.repo.call_git(["merge", "-q", "--no-edit",
+                      "refs/remotes/origin/convert/subject-06_session-a"])
+    ds.repo.call_git(["push", "-q", "--no-verify", "origin", "dev",
+                      ":convert/subject-06_session-a"])
+    assert not any("subject-06" in line for line in L.update(ds) if line.startswith("opened"))
+
+
 def test_pilot_isolation(project, tmp_path, platform):
     fake, repo = platform
     origin = Dataset(project.path("rawdata"))
-    dev_before = origin.repo.get_hexsha("dev")
     mri(project, tmp_path, "09", pilot=True)
     ds = bids(project, tmp_path)
-    lines = L.sessions(ds, fake, repo)
+    lines = L.update(ds, fake, repo)
     assert "opened convert-pilot/subject-09_session-a" in lines
     pr = next(p for p in fake.open_pull_requests(repo) if "subject-09" in p.source)
     assert pr.target == "pilot"
+    dev_before = origin.repo.get_hexsha("dev")
     on(ds, "convert-pilot/subject-09_session-a")
-    assert ds.repo.call_git(["merge-base", "HEAD", "refs/remotes/origin/pilot"]).strip() == \
-        origin.repo.get_hexsha("pilot")
+    assert ds.repo.get_hexsha() == origin.repo.get_hexsha("base")
     T.run_all(ds)
     assert origin.repo.get_hexsha("dev") == dev_before
 
@@ -140,7 +175,7 @@ def test_trigger(tmp_path):
     fake.ensure_repository("lab/study/derivatives/x")
     lines = L.trigger("lab/study/rawdata, lab/study/derivatives/x", "dev", fake, "lab/study/up")
     assert len(lines) == 2
-    assert fake.pipelines[0] == ("lab/study/rawdata", "dev", {
+    assert fake.pipelines[0] == ("lab/study/rawdata", "base", {
         "FAIRE_TRIGGERED_BY": "lab/study/up", "FAIRE_UPSTREAM_REF": "dev"})
 
 

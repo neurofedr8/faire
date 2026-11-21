@@ -25,6 +25,7 @@ def setup(tmp_path_factory, reference, templates_root):
     # accepted data on dev: one shareable file, one restricted
     ds = clone(source=str(proj.path("rawdata")), path=str(env.root / "c"),
                result_renderer="disabled")
+    ds.repo.call_git(["checkout", "-q", "-b", "dev", "refs/remotes/origin/dev"])
     (Path(ds.path) / "data.bin").write_bytes(b"\0shared")
     (Path(ds.path) / "secret.bin").write_bytes(b"\0secret")
     ds.save(result_renderer="disabled")

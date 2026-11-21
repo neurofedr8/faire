@@ -1,5 +1,5 @@
-"""Session lifecycle: session branches, status of each source stream, reviewer waivers, and
-triggering downstream datasets.
+"""Session lifecycle: the ``update`` task on ``base``, status of each source stream, reviewer
+waivers, and triggering downstream datasets.
 
 The status table is a TSV with one row per sample and one column per source of the dataset.
 Its location comes from the dataset's configuration (defaults are BIDS-like)::
@@ -20,12 +20,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datalad.api import Dataset
+from datalad.runner.exception import CommandError
 
-from faire.branches import bump_source, checkout_sources, start_session
+from faire.branches import bump_source, checkout_sources
 from faire.rules import expand, load
 from faire.state import (
+    BASE,
+    TRAILER_PILOT,
     TRAILER_SAMPLE,
-    base_of,
     branch_base,
     branch_for,
     git,
@@ -53,6 +55,8 @@ DEFAULTS = {
 }
 TRAILER_STATUS = "faire-status"
 COMPLETENESS = "completeness"
+TARGETS = ("dev", "pilot")
+UPDATE_RETRIES = 5
 
 
 class LifecycleError(RuntimeError):
@@ -247,115 +251,139 @@ def _remote_branches(ds: Dataset) -> set[str]:
     return set(out.split())
 
 
-def upstream_samples(ds: Dataset, path: str, ref: str) -> set[str]:
-    """Samples present on ``ref`` of the source at ``path`` (installed and fetched)."""
+def upstream_samples(ds: Dataset, path: str, commit: str) -> dict[str, bool]:
+    """Samples of the source at ``path`` as recorded at ``commit`` -> whether it is a pilot."""
+    oid = tree(ds, commit).get(path, ("", ""))[1]
     sub = ds.pathobj / path
+    if not oid:
+        return {}
     if not (sub / ".git").exists():
         ds.get(path, get_data=False, result_renderer="disabled")
     source = Dataset(sub)
-    _fetch(source)
-    head = f"refs/remotes/origin/{ref}"
     try:
-        git(source, "rev-parse", "--verify", "-q", head)
+        git(source, "cat-file", "-e", oid)
     except Exception:
-        return set()
-    out = set()
-    for _, trailers in log(source, head):
+        _fetch(source)
+    out: dict[str, bool] = {}
+    for _, trailers in log(source, oid):
         if "faire-entities" in trailers:
             pairs = [p.split("=", 1) for p in trailers["faire-entities"][0].split(",")]
-            out.add("_".join(f"{k}-{v}" for k, v in pairs))
-        out.update(trailers.get(TRAILER_SAMPLE, []))
+            label = "_".join(f"{k}-{v}" for k, v in pairs)
+            out[label] = out.get(label, False) or TRAILER_PILOT in trailers
+        for label in trailers.get(TRAILER_SAMPLE, []):
+            out.setdefault(label, False)
     return out
 
 
-def processed(ds: Dataset, base: str) -> set[str]:
-    """Samples whose primary rules have run records on ``base`` (on origin)."""
+def processed(ds: Dataset, target: str) -> set[str]:
+    """Samples whose primary rules have run records on ``target`` (on origin)."""
+    if target not in _remote_branches(ds):
+        return set()
     rules, _ = load(ds)
     primary = {r.name for r in rules.values() if r.primary}
     out = set()
-    for _, t in log(ds, f"refs/remotes/origin/{base}"):
+    for _, t in log(ds, f"refs/remotes/origin/{target}"):
         if t.get("faire-rule", [None])[0] in primary:
             out.update(t.get(TRAILER_SAMPLE, []))
     return out
 
 
 def open_sessions(ds: Dataset) -> list[str]:
-    """Labels of the dataset's session branches on origin."""
+    """The dataset's session branches on origin."""
     return sorted(b for b in _remote_branches(ds) if sample_of(b) is not None)
 
 
-def sessions(ds: Dataset, platform=None, repository=None) -> list[str]:
-    """Open session branches for new samples of primary sources, and bring newly arrived
-    secondary streams to the open branches still waiting for them."""
-    _fetch(ds)
-    lines = []
-    srcs = sources(ds, "refs/remotes/origin/dev")
-    primaries = primary_sources(ds) & set(srcs)
-    open_branches = set(open_sessions(ds))
-    original = ds.repo.get_active_branch()
-    for pilot in (False, True):
-        base = "pilot" if pilot else "dev"
-        if base not in _remote_branches(ds):
-            continue
-        done = processed(ds, base)
-        found = set()
-        for stream in sorted(primaries):
-            for path in srcs[stream]:
-                found |= upstream_samples(ds, path, base)
-        for label in sorted(found - done):
-            branch = branch_for(label, pilot)
-            if branch in open_branches:
-                continue
-            start_session(ds, label, pilot)
-            for paths in srcs.values():
-                for path in paths:
-                    bump_source(ds, path, base, save=False)
-            ds.save(path=[p for ps in srcs.values() for p in ps],
-                    message=f"faire: start session {label}", result_renderer="disabled")
-            publish(ds, branch)
-            if platform:
-                platform.ensure_pull_request(repository, branch, base, f"Session {label}",
-                                             f"Conversion of {label}.", draft=True)
-            lines.append(f"opened {branch}")
-            open_branches.add(branch)
-    for branch in sorted(open_branches):
-        lines += _bring_streams(ds, branch, srcs)
-    if original:
-        ds.repo.call_git(["checkout", "-q", original])
+def _push(ds: Dataset, branch: str, ci: bool) -> None:
+    options = [] if ci or not os.environ.get("GITLAB_CI") else ["-o", "ci.skip"]
+    ds.repo.call_git(["push", "-q", "--no-verify", *options, "origin",
+                      f"HEAD:refs/heads/{branch}"])
+
+
+def _update_base(ds: Dataset) -> list[str]:
+    """Point every source at its ``dev`` head on ``base``; recompute when another update
+    pushed first, so the pointer history stays linear."""
+    for attempt in range(UPDATE_RETRIES):
+        _fetch(ds)
+        ds.repo.call_git(["checkout", "-q", "-B", BASE, f"refs/remotes/origin/{BASE}"])
         checkout_sources(ds)
+        paths = [p for ps in sources(ds).values() for p in ps]
+        moved = [p for p in paths if bump_source(ds, p, "dev", save=False)]
+        if not moved:
+            return []
+        ds.save(path=moved, message="faire: update sources\n\n" + "\n".join(moved),
+                result_renderer="disabled")
+        try:
+            _push(ds, BASE, ci=False)
+            return [f"updated {p} on {BASE}" for p in moved]
+        except CommandError:
+            if attempt == UPDATE_RETRIES - 1:
+                raise
+    return []
+
+
+def _merge_base_into(ds: Dataset, branch: str, ci: bool) -> bool:
+    """Merge ``base`` into ``branch`` on origin; False when it already contains it."""
+    head = f"refs/remotes/origin/{branch}"
+    try:
+        git(ds, "merge-base", "--is-ancestor", BASE, head)
+        return False
+    except CommandError:
+        pass
+    ds.repo.call_git(["checkout", "-q", "-B", branch, head])
+    try:
+        ds.repo.call_git(["merge", "-q", "--no-edit", "-m",
+                          f"faire: merge {BASE} into {branch}", BASE])
+    except CommandError as exc:
+        ds.repo.call_git(["merge", "--abort"])
+        raise LifecycleError(f"merging {BASE} into {branch} conflicts: {exc}") from exc
+    _push(ds, branch, ci)
+    return True
+
+
+def update(ds: Dataset, platform=None, repository=None) -> list[str]:
+    """The ``update`` task on ``base``: sources to their ``dev`` heads, ``base`` merged into
+    ``dev``, ``pilot`` and every open session, and sessions opened for new samples."""
+    original = ds.repo.get_active_branch()
+    lines = _update_base(ds)
+    for target in TARGETS:
+        if target in _remote_branches(ds) and _merge_base_into(ds, target, ci=False):
+            lines.append(f"merged {BASE} into {target}")
+    sessions = set(open_sessions(ds))
+    for branch in sorted(sessions):
+        if _merge_base_into(ds, branch, ci=True):
+            lines.append(f"merged {BASE} into {branch}")
+    srcs = sources(ds, BASE)
+    samples: dict[str, bool] = {}
+    for stream in sorted(primary_sources(ds) & set(srcs)):
+        for path in srcs[stream]:
+            for label, pilot in upstream_samples(ds, path, BASE).items():
+                samples[label] = samples.get(label, False) or pilot
+    done = {target: processed(ds, target) for target in TARGETS}
+    for label, pilot in sorted(samples.items()):
+        branch = branch_for(label, pilot)
+        target = "pilot" if pilot else "dev"
+        if branch in sessions or label in done[target]:
+            continue
+        ds.repo.call_git(["checkout", "-q", "-B", branch, BASE])
+        _push(ds, branch, ci=True)
+        if platform:
+            platform.ensure_pull_request(repository, branch, target, f"Session {label}",
+                                         f"Conversion of {label}.", draft=True)
+        lines.append(f"opened {branch}")
+    ds.repo.call_git(["checkout", "-q", original or BASE])
+    checkout_sources(ds)
     return lines
 
 
-def _bring_streams(ds: Dataset, branch: str, srcs: dict[str, list[str]]) -> list[str]:
-    label = sample_of(branch)
-    base = base_of(branch)
-    ds.repo.call_git(["checkout", "-q", "-B", branch, f"refs/remotes/origin/{branch}"])
-    checkout_sources(ds)
-    row = current(ds, label)
-    moved = []
-    for stream, paths in sorted(srcs.items()):
-        if row.get(stream, PENDING) != PENDING:
-            continue
-        for path in paths:
-            if bump_source(ds, path, base, save=False):
-                moved.append(path)
-    if not moved:
-        return []
-    ds.save(path=moved, message=f"faire: bring {', '.join(moved)} to {label}",
-            result_renderer="disabled")
-    ds.repo.call_git(["push", "-q", "--no-verify", "origin", f"HEAD:refs/heads/{branch}"])
-    return [f"updated {path} on {branch}" for path in moved]
-
-
 def trigger(downstream: str, ref: str, platform, triggered_by: str) -> list[str]:
-    """Start a pipeline on ``dev`` of each downstream repository (comma-separated paths)."""
+    """Start a pipeline on ``base`` of each downstream repository (comma-separated paths)."""
     out = []
     for path in filter(None, (p.strip() for p in downstream.split(","))):
         repo = platform.get_repository(path)
         if repo is None:
             raise LifecycleError(f"downstream repository {path!r} does not exist")
-        pid = platform.start_pipeline(repo, "dev", {"FAIRE_TRIGGERED_BY": triggered_by,
-                                                    "FAIRE_UPSTREAM_REF": ref})
+        pid = platform.start_pipeline(repo, BASE, {"FAIRE_TRIGGERED_BY": triggered_by,
+                                                   "FAIRE_UPSTREAM_REF": ref})
         out.append(f"triggered {path} (pipeline {pid})")
     return out
 

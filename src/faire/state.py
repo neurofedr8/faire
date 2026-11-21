@@ -18,7 +18,9 @@ from faire.rules import Rule, expand, later
 
 TRAILER_RULE = "faire-rule"
 TRAILER_SAMPLE = "faire-sample"
-BRANCH_PREFIXES = {"convert/": "dev", "convert-pilot/": "pilot"}
+TRAILER_PILOT = "faire-pilot"
+BASE = "base"  # source pointers and configuration; sessions start here
+BRANCH_PREFIXES = {"convert/": "dev", "convert-pilot/": "pilot"}  # session prefix -> target
 
 
 # -- samples and branches ------------------------------------------------------------------

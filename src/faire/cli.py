@@ -178,14 +178,26 @@ def plan_cmd(dataset_path, ci_render, stage) -> None:
 @click.option("--all", "run_all", is_flag=True, help="Run every due task, wave after wave.")
 @click.option("--no-push", is_flag=True, help="Commit locally only.")
 def run_cmd(dataset_path, task_id, run_all, no_push) -> None:
-    """Run one task, or all due tasks, of the current session branch."""
+    """Run one task, or all due tasks, of the current session branch.
+
+    Task ``update`` (planned on ``base``) moves source pointers, merges ``base`` into ``dev``,
+    ``pilot`` and open sessions, and opens sessions for new samples."""
     from faire import tasks as T
 
     if bool(task_id) == bool(run_all):
         raise click.UsageError("give either --task or --all")
     ds = _dataset(dataset_path)
     try:
-        if task_id:
+        if task_id == "update":
+            from faire import lifecycle as L
+
+            try:
+                platform, repo = _platform_from_env()
+            except click.ClickException:
+                platform = repo = None
+            for line in L.update(ds, platform, repo) or ["nothing to update"]:
+                click.echo(line)
+        elif task_id:
             click.echo(f"{task_id}: {T.run_task(ds, task_id, push=not no_push)}")
         else:
             for line in T.run_all(ds, push=not no_push):
@@ -305,20 +317,6 @@ def mark_cmd(assignment, dataset_path, by, no_push) -> None:
     except L.LifecycleError as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"{stream}: {result}")
-
-
-@main.command("sessions")
-@click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
-def sessions_cmd(dataset_path) -> None:
-    """Open session branches for new samples and bring newly arrived streams to open ones."""
-    from faire import lifecycle as L
-
-    try:
-        platform, repo = _platform_from_env()
-    except click.ClickException:
-        platform = repo = None
-    for line in L.sessions(_dataset(dataset_path), platform, repo):
-        click.echo(line)
 
 
 @main.command("trigger")

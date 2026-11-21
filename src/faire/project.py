@@ -23,6 +23,7 @@ from faire import containers, layout, remotes, templates
 from faire.layout import SOURCEDATA, Unit
 from faire.plan import Plan
 from faire.platform import Platform, relative_url
+from faire.state import BASE
 
 DATASET_ID = "faire.dataset-id"
 INSTANCE = "faire.instance"
@@ -31,10 +32,10 @@ TEMPLATE_VERSION = "faire.template-version"
 DOWNSTREAM_VARIABLE = "FAIRE_DOWNSTREAM"
 DMP_FILE = "dmp.json"
 EARLY_STAGES = ("collection", "accepted")
-DATASET_BRANCHES = ("dev", "pilot")
+DATASET_BRANCHES = ("base", "dev", "pilot")  # the first is the default branch
 STREAM_BRANCHES = ("dev",)
 SUPERDATASET_BRANCHES = ("dev", "main")
-PROTECTED = ("dev", "pilot", "convert/*")
+PROTECTED = ("base", "dev", "pilot", "convert/*", "convert-pilot/*")
 SUPERDATASET_PROTECTED = ("dev", "main", "rel/*")
 APPROVALS = 1
 
@@ -174,12 +175,14 @@ class Project:
     def _create(self, unit: Unit) -> None:
         template = unit.dataset.template
         path = self.path(unit)
+        branches = (SUPERDATASET_BRANCHES if unit.is_superdataset
+                    else STREAM_BRANCHES if unit.instrument else DATASET_BRANCHES)
         with tempfile.TemporaryDirectory() as tmp:
             rendered = Path(tmp) / "rendered"
             templates.render(template, rendered, self._context(unit))  # fails before creating
             ds = create(path=str(path), **_quiet())
             try:
-                ds.repo.call_git(["branch", "-M", "dev"])
+                ds.repo.call_git(["branch", "-M", branches[0]])
                 templates.merge(ds, rendered)
                 ds.config.set(DATASET_ID, unit.dataset.id, scope="branch", reload=False)
                 if unit.instrument:
@@ -199,10 +202,8 @@ class Project:
             self._populate_superdataset(ds)
         for spec in self._remote_specs(unit):
             remotes.create(ds, spec)
-        branches = (SUPERDATASET_BRANCHES if unit.is_superdataset
-                    else STREAM_BRANCHES if unit.instrument else DATASET_BRANCHES)
         for branch in branches[1:]:
-            ds.repo.call_git(["branch", branch, "dev"])
+            ds.repo.call_git(["branch", branch, branches[0]])
         if self.platform:
             self._publish(unit, ds, branches)
         else:  # the working dataset is the repository others clone from and push to
@@ -334,7 +335,7 @@ class Project:
         """Register a new source on ``branch`` in a throwaway clone, leaving ``ds`` as it is."""
         with tempfile.TemporaryDirectory() as tmp:
             work = clone(source=ds.path, path=str(Path(tmp) / "work"), **_quiet())
-            work.repo.call_git(["checkout", "-q", "-b", branch, "origin/dev"])
+            work.repo.call_git(["checkout", "-q", "-b", branch, f"origin/{BASE}"])
             self._install_source(work, unit, sub, src)
             # git-annex refuses pushes from clones with unverified special remotes; this only
             # moves a branch into the working dataset
@@ -344,7 +345,7 @@ class Project:
             with self.platform.git_auth():
                 ds.repo.call_git(["push", "origin", branch])
             self.platform.ensure_pull_request(
-                repo, branch, "dev", f"Register {sub}",
+                repo, branch, BASE, f"Register {sub}",
                 f"New instrument instance {src.label} declared in the ma-DMP.",
             )
 

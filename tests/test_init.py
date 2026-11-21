@@ -48,12 +48,15 @@ def test_fresh_project(shared):
     created_order = [a.split(" at ")[1] for a in report.actions]
     # sources before derived datasets, superdataset last
     assert created_order == [UNITS[0], "sourcedata/dicoms/a_Skyra45012", *UNITS[1:]]
-    for logical, ident in [("rawdata", "bids"), ("derivatives/fmriprep", "fmriprep"),
-                           ("sourcedata/dicoms/a_PrismaFit16001", "dicoms")]:
+    for logical, ident in [("rawdata", "bids"), ("derivatives/fmriprep", "fmriprep")]:
         ds = Dataset(proj.path(logical))
         assert ds.config.get(P.DATASET_ID) == ident
-        assert ds.repo.get_active_branch() == "dev"
-        assert {"dev", "pilot"} <= set(ds.repo.get_branches())
+        assert ds.repo.get_active_branch() == "base"  # default branch
+        assert set(ds.repo.get_branches()) - {"git-annex"} == {"base", "dev", "pilot"}
+        assert ds.repo.get_hexsha("dev") == ds.repo.get_hexsha("base")
+    stream = Dataset(proj.path("sourcedata/dicoms/a_PrismaFit16001"))
+    assert stream.config.get(P.DATASET_ID) == "dicoms"
+    assert set(stream.repo.get_branches()) - {"git-annex"} == {"dev"}
 
 
 def test_recorded_template(shared):
@@ -148,7 +151,7 @@ def test_platform_repositories(env):
     assert paths == {f"lab/study/{u}" for u in UNITS}
     bids = platform.get_repository("lab/study/rawdata")
     entry = platform.entry(bids)
-    assert entry.protected == {"dev", "pilot", "convert/*"}
+    assert entry.protected == {"base", "dev", "pilot", "convert/*", "convert-pilot/*"}
     assert entry.approvals == 1
     assert entry.variables[P.DOWNSTREAM_VARIABLE] == "lab/study/derivatives/fmriprep"
     dicoms = platform.get_repository("lab/study/sourcedata/dicoms/a_PrismaFit16001")
@@ -218,9 +221,9 @@ def test_new_instrument(env):
     assert "create dicoms/a_Skyra45012 at sourcedata/dicoms/a_Skyra45012" in report.actions
     bids = platform.get_repository("lab/study/rawdata")
     [pr] = platform.open_pull_requests(bids)
-    assert (pr.source, pr.target) == ("faire/register-dicoms-a_Skyra45012", "dev")
+    assert (pr.source, pr.target) == ("faire/register-dicoms-a_Skyra45012", "base")
     ds = Dataset(proj.path("rawdata"))
-    assert ds.repo.get_active_branch() == "dev"
+    assert ds.repo.get_active_branch() == "base"
     assert not proj.path("rawdata/sourcedata/dicoms/a_Skyra45012").exists()
     _, again = run(env, doc, platform=platform)
     assert again.actions == []

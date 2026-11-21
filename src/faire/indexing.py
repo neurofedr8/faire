@@ -23,10 +23,10 @@ from faire import remotes
 from faire.layout import Unit, logical_path
 from faire.plan import sample_label
 from faire.project import Project
+from faire.state import TRAILER_PILOT
 
 HEURISTIC = ".faire/heuristic.py"
 BRANCH = "dev"
-TRAILER_PILOT = "faire-pilot"
 VALUE = re.compile(r"^[A-Za-z0-9-]+$")
 
 

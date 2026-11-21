@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datalad.api import Dataset
 
-from faire.state import base_of, branch_for, tree
+from faire.state import BASE, branch_for, tree
 
 
 def bump_source(ds: Dataset, sub: str, ref: str = "dev", save: bool = True) -> bool:
@@ -29,11 +29,10 @@ def bump_source(ds: Dataset, sub: str, ref: str = "dev", save: bool = True) -> b
 
 
 def start_session(ds: Dataset, label: str, pilot: bool = False) -> str:
-    """Create and check out the session branch from the base branch on origin."""
+    """Create and check out the session branch from ``base`` on origin."""
     branch = branch_for(label, pilot)
-    base = base_of(branch)
     ds.repo.call_git(["fetch", "-q", "origin"])
-    ds.repo.call_git(["checkout", "-q", "-b", branch, f"refs/remotes/origin/{base}"])
+    ds.repo.call_git(["checkout", "-q", "-b", branch, f"refs/remotes/origin/{BASE}"])
     return branch
 
 
