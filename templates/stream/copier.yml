@@ -1,0 +1,3 @@
+# Reference template of a sourcedata stream instance (one per instrument).
+# Context provided by faire: dataset_id, title, site, instrument_id, instance.
+_answers_file: .copier-answers.yml

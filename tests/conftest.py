@@ -181,3 +181,56 @@ def deep(doc: dict) -> dict:
 
 def commits(path: Path) -> str:
     return Dataset(path).repo.call_git(["rev-parse", "--all"])
+
+
+REFERENCE = Path(__file__).parents[1] / "templates"
+
+
+def git_template_dir(src: Path, dest: Path, tag: str = "v0.1.0") -> str:
+    files = {str(p.relative_to(src)): p.read_text() for p in src.rglob("*") if p.is_file()}
+    return git_template(dest, files, tag)
+
+
+@dataclass
+class Reference:
+    """The repository's reference templates, as tagged git repositories."""
+
+    stream: str
+    standard: str
+    superdataset: str
+    collection: str
+
+
+@pytest.fixture(scope="session")
+def reference(tmp_path_factory) -> Reference:
+    root = tmp_path_factory.mktemp("reference")
+    col = root / "toy-collection"
+    ds = create(path=str(col), result_renderer="disabled")
+    (col / "images").mkdir()
+    (col / "images" / "toy-1.0.sh").write_text(
+        (REFERENCE / "toy-collection" / "images" / "toy-1.0.sh").read_text())
+    ds.save(message="toy 1.0", result_renderer="disabled")
+    ds.repo.call_git(["tag", "v1"])
+    return Reference(
+        git_template_dir(REFERENCE / "stream", root / "stream"),
+        git_template_dir(REFERENCE / "standard", root / "standard"),
+        git_template_dir(REFERENCE / "superdataset", root / "superdataset"),
+        str(col),
+    )
+
+
+def reference_doc(env: Env, ref: Reference) -> dict:
+    """Two streams feeding one standard dataset, all from the reference templates."""
+    ria = f"ria+file://{env.root / 'ria'}"
+    doc = env.doc()
+    doc["dmp"]["faire"]["superdataset"]["template"]["repository"] = ref.superdataset
+    doc["dmp"]["dataset"] = [
+        env.dataset("dicoms", "scanner", ref.stream, instruments=["PrismaFit16001"],
+                    distributions=[env.dist("Site storage", "collection", ria)]),
+        env.dataset("physio", "physio", ref.stream, instruments=["Biopac01"],
+                    distributions=[env.dist("Site storage", "collection", ria)]),
+        env.dataset("bids", "BIDS", ref.standard, path="rawdata", sources=["dicoms", "physio"],
+                    data={"collection_url": ref.collection},
+                    distributions=[env.dist("Site storage", "collection", ria)]),
+    ]
+    return doc

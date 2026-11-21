@@ -1,0 +1,13 @@
+# Reference template of a standard (converted) dataset, exercising every rule kind:
+# a primary conversion, a secondary rule combining the dataset with another stream,
+# an in-place rule, and a blocking and an advisory check.
+collection_url:
+  type: str
+  help: Clone URL of the container collection
+primary_stream:
+  type: str
+  default: dicoms
+secondary_stream:
+  type: str
+  default: physio
+_answers_file: .copier-answers.yml

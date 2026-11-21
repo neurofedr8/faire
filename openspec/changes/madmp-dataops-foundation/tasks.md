@@ -24,8 +24,8 @@
 
 ## 4. Reference templates
 
-- [ ] 4.1 Reference stream template with an example heuristic and a reference superdataset template; verify init renders both
-- [ ] 4.2 Reference standard dataset template with one primary rule, one secondary rule using `.` and another stream, one in-place rule, and one blocking and one advisory check, all as container entries with a tiny test container; verify `containers-list` shows them
+- [x] 4.1 Reference stream template with an example heuristic and a reference superdataset template; verify init renders both
+- [x] 4.2 Reference standard dataset template with one primary rule, one secondary rule using `.` and another stream, one in-place rule, and one blocking and one advisory check, all as container entries with a tiny test container; verify `containers-list` shows them
 
 ## 5. Indexing
 
