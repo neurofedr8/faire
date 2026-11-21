@@ -1,217 +1,69 @@
 ## Purpose
 
-Defines how a dataset's computations and checks are described and executed: the ma-DMP says what is derived from what, the dataset template says how through a list of rules, and the tool plans which tasks are due and runs each one identically in CI or by hand, with provenance recorded.
+Defines how a dataset declares its computations and checks as container entries, how faire decides what is due, and how tasks are planned, rendered for CI and run.
 
 ## ADDED Requirements
 
-### Requirement: Processing rules carried by the dataset
-Each dataset SHALL contain a list of processing rules, provided by its template. Each rule SHALL declare an identifier, its trigger, the registered container to use, the command to execute, the input patterns it reads, the inputs it requires, the output patterns it produces, the files to keep as job artifacts, and the files to list in the pull request. Pipeline logic SHALL NOT be defined in platform-specific pipeline definitions, which SHALL only invoke the tool.
+### Requirement: Rules are container entries
+A rule SHALL be a datalad-container entry of the dataset carrying faire keys: one or more `faire-sourcedata` (source ids, or `.` for the dataset itself), `faire-input` and `faire-output` patterns using sample entities, and `faire-cmd`. A rule without `.` among its sources is primary; a rule with `.` is secondary.
 
-#### Scenario: Rules present after creation
-- **WHEN** a derived dataset is created from its template
-- **THEN** the dataset contains its processing rules, each naming a container registered in that dataset
+#### Scenario: Primary and secondary
+- **WHEN** `heudiconv` lists `dicoms` and `bidsphysio` lists `.` and `physio`
+- **THEN** `heudiconv` is reported primary and `bidsphysio` secondary
 
-#### Scenario: Rule naming an unknown container
-- **WHEN** a processing rule names a container that is not registered in the dataset
-- **THEN** planning fails before executing anything and names the rule and the container
+### Requirement: Checks are container entries
+A check SHALL be a container entry with `faire-check` set to `blocking` or `advisory` and one or more `faire-stage`. `faire test` SHALL execute checks for a stage with the entry's call format, without recording a run, and SHALL fail a check that modifies the worktree. A failing blocking check SHALL make `faire test` exit non-zero; a failing advisory check SHALL only warn.
 
-### Requirement: Rule triggers
-A rule SHALL be triggered either by a change in a triggering source of the dataset, or by a change, within the dataset itself, of files matching patterns the rule declares. A source-triggered rule SHALL deliver its results on the sample's feature branch through a pull request. A content-triggered rule SHALL deliver its results as a commit on the branch whose content triggered it.
+#### Scenario: Check modifies files
+- **WHEN** a check writes a file in the dataset
+- **THEN** the check fails and the change is reported
 
-#### Scenario: Source-triggered rule
-- **WHEN** a triggering source gains sample `S`
-- **THEN** the rule's results for `S` arrive as a pull request against the dataset's `dev`
+### Requirement: Due tasks
+A task is a rule applied to one sample. It SHALL be due when its inputs exist at HEAD and either no run record of the rule for that sample exists since the branch left its base, or the fingerprint of its inputs (matched file contents and source subdataset commits) at HEAD differs from that at its last record commit. Differences introduced only by commits of rules ordered after it SHALL be ignored.
 
-#### Scenario: Content-triggered rule
-- **WHEN** a pull request branch gains files matching the trigger patterns of a content-triggered rule
-- **THEN** the rule's results are committed to that same branch and appear in the same pull request
+#### Scenario: In-place rule
+- **WHEN** a defacing rule rewrote the file it reads and nothing else changed
+- **THEN** it is not due
 
-### Requirement: Samples identified by entities
-A sample SHALL be identified by values for the entity names declared in the ma-DMP. Input patterns of a rule SHALL be resolved by substituting the entity values of the sample that triggered the task. Output patterns SHALL be resolved by substituting those values, except for the entities the rule declares as captured, which are determined by what the task writes.
+#### Scenario: Source moved
+- **WHEN** the `sourcedata/physio` pointer moves after `bidsphysio` ran
+- **THEN** `bidsphysio` is due
 
-#### Scenario: Pattern resolution
-- **WHEN** a rule declares an input pattern using the entities `subject` and `session` and is run for the sample `subject=01, session=003`
-- **THEN** only files matching the pattern with those values are treated as inputs
+### Requirement: Optional ordering
+`faire-after` MAY name rules a rule runs after. It SHALL only order rules; a rule SHALL NOT be forced to run by it.
 
-#### Scenario: Missing entity
-- **WHEN** a task is requested for a sample that lacks a value for an entity the rule's patterns use
-- **THEN** it fails and names the missing entity
+#### Scenario: Ordered chain
+- **WHEN** `pydeface` declares `faire-after = unwarp` and both are due
+- **THEN** `pydeface` runs after `unwarp` finishes
 
-### Requirement: Captured output entities
-A rule MAY declare entities in its output patterns as captured. After the command succeeds, the tool SHALL match the files the task wrote against the output patterns and record in the run record the trigger sample and every output sample, that is, every combination of captured values found. The files matched SHALL be the declared outputs of the task. Files written outside every output pattern SHALL be reported and not saved. Output samples are the samples under which downstream datasets are triggered. Identifier mappings the command needs SHALL NOT be committed in plain text to a dataset that is shared beyond the site; the command SHALL derive output values from the data or read such mappings from files kept in the sensitive part of the dataset.
+### Requirement: Plan
+`faire plan` SHALL list the due tasks from the current state, including rules ordered after a planned rule, each with an id, rule, sample, order constraints and runner. `--ci-render gitlab` SHALL produce a GitLab child pipeline and `--ci-render github` a GitHub Actions matrix definition, each running `faire run --task <id>` per task, then `faire status`, `faire test` and `faire replan`.
 
-#### Scenario: One input sample, one output sample
-- **WHEN** a rule with captured entities `subject` and `session` runs for the trigger sample `subject=PAT42, session=0301` and writes files under `sub-01/ses-01/`
-- **THEN** the run record names the trigger sample and the output sample `subject=01, session=01`
+#### Scenario: Render
+- **WHEN** two independent tasks and one ordered after the first are due
+- **THEN** the rendered pipeline runs the first two in parallel and the third after the first
 
-#### Scenario: One input sample, several output samples
-- **WHEN** a task writes files under both `sub-01/ses-01/` and `sub-01/ses-02/`
-- **THEN** the run record lists both output samples and all their files are saved
+### Requirement: Run
+`faire run --task <id>` SHALL re-check that the task is due, retrieve only its inputs, execute it with `datalad containers-run` with declared inputs and outputs, commit, merge the branch's remote head, and push with retries; it SHALL push content to the dataset's `collection` remotes. A task whose inputs are absent SHALL exit with status zero and no commit. `faire run --all` SHALL run all due tasks in order in one process. Behaviour SHALL be the same in and out of CI.
 
-#### Scenario: Nothing matches
-- **WHEN** a task succeeds but no written file matches the output patterns
-- **THEN** the task fails, names the rule, and nothing is saved
+#### Scenario: Concurrent pushes
+- **WHEN** two tasks on one branch push at the same time
+- **THEN** the second merges the first's commit and its push succeeds
 
-#### Scenario: Two trigger samples, one output sample
-- **WHEN** two trigger samples both produce files under `sub-01/ses-01/`
-- **THEN** each task's run record lists that output sample, and the files they both write follow the dataset's merge rules for shared files
+#### Scenario: No longer due
+- **WHEN** a task is run after another job already ran it
+- **THEN** it exits with status zero and no commit
 
-### Requirement: Planning from the dataset's state
-The tool SHALL provide a command that determines, for a branch of a dataset, the tasks that are due, each task being one rule applied to one sample, and outputs them as a machine-readable list giving for each task its identifier, rule, sample, site and position in the order. A task SHALL be due when the inputs recorded by the rule's last run for that sample differ from their current state, or when the rule has never run for that sample. Planning SHALL depend only on the state of the dataset and its sources, not on which event started it, and SHALL NOT change the dataset.
+### Requirement: Replan
+`faire replan` SHALL start a new pipeline on the branch when its head moved during the pipeline, and SHALL refuse when a task ran twice without its sources changing, naming the rules involved.
 
-#### Scenario: New sample upstream
-- **WHEN** a triggering source holds a sample for which a source-triggered rule has no recorded run
-- **THEN** the plan contains one task for that rule and sample
+#### Scenario: Next wave
+- **WHEN** `heudiconv` committed converted files in a pipeline
+- **THEN** replan starts a pipeline that plans rules now finding their inputs
 
-#### Scenario: Nothing to do
-- **WHEN** every rule's recorded inputs match the current state
-- **THEN** the plan is empty and the command exits successfully
+### Requirement: Re-executable results
+Every committed result SHALL carry a DataLad run record sufficient for `datalad rerun` in a fresh clone.
 
-#### Scenario: Missed event
-- **WHEN** an upstream change occurred while no pipeline could start, and planning is run later
-- **THEN** the plan contains the tasks that change made due
-
-#### Scenario: Planning by hand
-- **WHEN** a maintainer runs the planning command in a clone outside CI
-- **THEN** the same list is produced as in a CI job for the same state
-
-### Requirement: Explicit order of rules on a branch
-Rules that deliver results on the same branch SHALL have an explicit order declared in the dataset. Their due tasks for a sample SHALL be executed consecutively in that order, each starting from the state left by the previous one. A rule that is skipped, because it is optional for that sample or its required inputs are absent, SHALL NOT prevent the rules ordered after it from running on the current state. No rule SHALL use the existence of another rule's outputs as its trigger.
-
-#### Scenario: Two steps in sequence
-- **WHEN** rules `A` then `B` are both due on a pull request branch for sample `S`
-- **THEN** `A` runs and commits first, and `B` runs on the branch state that includes `A`'s commit
-
-#### Scenario: Optional step skipped
-- **WHEN** rule `A` is skipped for sample `S` and rule `B` is due
-- **THEN** `B` runs on the branch state without `A`'s outputs
-
-### Requirement: No re-triggering by own or later results
-A commit made by a rule SHALL NOT make that rule, or a rule ordered before it on the same branch, due again for the same sample.
-
-#### Scenario: Rule modifies its own inputs
-- **WHEN** a content-triggered rule replaces files that match its own trigger patterns
-- **THEN** planning after its commit does not contain that rule for that sample
-
-#### Scenario: Later rule modifies earlier inputs
-- **WHEN** rule `B`, ordered after `A`, changes files that `A` reads
-- **THEN** planning after `B`'s commit does not contain `A` for that sample
-
-### Requirement: Run command for one task
-The tool SHALL provide a command that runs one planned task. For a source-triggered rule it SHALL work on the sample's feature branch and update the `sourcedata/` references to the triggering revisions. In all cases it SHALL retrieve only the inputs the rule declares, execute the command through `datalad containers-run`, save the declared outputs, push the results, and open or update the pull request when the rule delivers through one. The same command SHALL be able to run all due tasks of a branch consecutively in their order.
-
-#### Scenario: Successful run
-- **WHEN** a task for sample `S` is run in a derived dataset whose required inputs exist
-- **THEN** the dataset has a pull request for `S` whose branch contains the outputs and a run record naming the container, command, inputs and outputs
-
-#### Scenario: Only declared inputs retrieved
-- **WHEN** a source dataset holds content for many samples and a task is run for sample `S`
-- **THEN** only content matching the rule's resolved input patterns and the declared resources is retrieved
-
-#### Scenario: All due tasks in one invocation
-- **WHEN** the command is asked to run everything due on a branch with tasks `A` then `B`
-- **THEN** both run in order in that single invocation and the branch ends in the same state as if each had run in its own job
-
-### Requirement: Same behaviour in and out of CI
-Running a task SHALL produce the same dataset changes whether invoked by a CI job or by a person in a clone, given the same sample, source revisions and credentials. Opening the pull request SHALL be skippable for local use.
-
-#### Scenario: Local run
-- **WHEN** a maintainer runs a task locally for sample `S` without pull request creation
-- **THEN** the local branch contains the same outputs and run record a CI job would have produced, and no pull request is opened
-
-### Requirement: Triggering sources and resource sources
-A change to a triggering source SHALL make source-triggered rules due for the affected sample. A resource source SHALL be available to the computation at its pinned revision, and a change to it SHALL NOT make any task due.
-
-#### Scenario: Resource updated
-- **WHEN** a resource source of a dataset receives a new commit
-- **THEN** the plan for that dataset is unchanged
-
-#### Scenario: Resource used
-- **WHEN** a rule declares inputs from a resource source and is run for a sample
-- **THEN** those inputs are retrieved from the resource at the revision the dataset pins
-
-### Requirement: Silent skip when required inputs are absent
-When, for the given sample, no file matches an input the rule marks as required, the task SHALL make no branch, no commit and no pull request, SHALL exit successfully, and SHALL state the unmet requirement in its job output only. Datasets further downstream SHALL consequently not be triggered for that sample by that rule.
-
-#### Scenario: Sample without the required data
-- **WHEN** a task is run for a sample that has no file matching a required input
-- **THEN** the dataset is unchanged, no pull request exists for that sample from that rule, and the command exits with status zero
-
-### Requirement: Storage access for inputs and results
-Running a task SHALL obtain the credentials for the storage holding inputs and receiving results from the secrets named by the ma-DMP and the site configuration. A missing secret SHALL fail the task with a message naming the secret. Secret values SHALL NOT appear in output or in the dataset.
-
-#### Scenario: Missing storage secret
-- **WHEN** the secret for the storage holding a required input is not available to the job
-- **THEN** the task fails before execution, names the secret, and prints no secret value
-
-### Requirement: Results pushed to the dataset's working storage
-After a successful execution, the outputs' content SHALL be transferred to the storage of the dataset's distributions bound to the `review` stage, and the branch pushed to the dataset repository, before the pull request is opened or updated.
-
-#### Scenario: Reviewer can fetch results
-- **WHEN** a task has pushed its results to a pull request branch
-- **THEN** a fresh clone of that branch can retrieve every output file from the dataset's working storage
-
-### Requirement: Job artifacts declared by the rule
-The files a rule declares as job artifacts SHALL be made available as artifacts of the job that ran the task, whether or not the task succeeded, in addition to anything saved in the dataset.
-
-#### Scenario: Logs kept after failure
-- **WHEN** a rule declares its log directory as job artifacts and the task fails
-- **THEN** the log files are downloadable from the failed job
-
-### Requirement: Files listed in the pull request
-The files a rule declares for listing SHALL be listed in the pull request that carries the task's results, each with a link through which a reviewer can open it. The listing SHALL be updated when the task runs again.
-
-#### Scenario: Quality report
-- **WHEN** a rule declares its report file for listing and the task completes for sample `S`
-- **THEN** the pull request for `S` shows a link to that report
-
-### Requirement: Checks declared with the rules
-A dataset SHALL declare its checks alongside its rules, each check being marked blocking or advisory. The tool SHALL provide a command that lists the checks applicable to a branch and runs any one of them separately, so that each can run as its own job. The outcome of each check SHALL be reported on the pull request.
-
-#### Scenario: Checks listed
-- **WHEN** the check command is asked to list checks for a pull request branch
-- **THEN** it outputs each applicable check with its identifier and whether it is blocking or advisory
-
-#### Scenario: One check alone
-- **WHEN** the check command is run for a single check identifier
-- **THEN** only that check runs and its exit status reflects its result
-
-#### Scenario: Checks after processing
-- **WHEN** content-triggered rules are due on a pull request branch
-- **THEN** the checks are run on the state left by the last of them
-
-### Requirement: Execution at the sample's site of origin
-A task for a sample SHALL execute on runners belonging to the site where the sample originated. A site MAY use runners located elsewhere, provided they are orchestrated by that site and can reach its storage.
-
-#### Scenario: Two sites
-- **WHEN** a sample originating at site A is accepted in a source dataset
-- **THEN** the downstream task for that sample executes on a runner of site A and not on a runner of site B
-
-### Requirement: Ephemeral workspace
-A task SHALL be able to execute in a fresh, temporary clone and SHALL leave every result needed afterwards in the dataset repository, its storage, the job artifacts and the pull request, so that the workspace can be discarded.
-
-#### Scenario: Workspace discarded
-- **WHEN** the workspace of a completed task is deleted
-- **THEN** the pull request, its outputs and its run record remain retrievable
-
-### Requirement: Results re-executable from their record
-Any result accepted on `dev` or contained in a release SHALL be re-executable from its run record using only the dataset, the components it references at their recorded revisions, and access to the storage holding its inputs. The record SHALL identify the revision of every component involved: the sources, the container and the processing rule.
-
-#### Scenario: Re-execution by someone with access
-- **WHEN** a person with access to the inputs re-executes the run record of an accepted result in a fresh clone
-- **THEN** the computation runs with the same container, command and input revisions without any step not described in the dataset
-
-#### Scenario: Component versions recorded
-- **WHEN** the history of an accepted result is inspected
-- **THEN** the revision of each source, the container version and the processing rule version used are all identifiable
-
-### Requirement: Re-running a sample
-Running a source-triggered rule again for a sample that already has results in the dataset SHALL replace the outputs recorded by that sample's previous run in a new pull request and SHALL NOT alter outputs recorded by runs for other samples.
-
-#### Scenario: Rerun after correction
-- **WHEN** a task is run for a sample whose results are already on `dev`
-- **THEN** a new pull request replaces the outputs recorded by the previous run for that sample and leaves all other files unchanged
-
-#### Scenario: Rerun with converging samples
-- **WHEN** two trigger samples have written files into one output sample and one of them is run again
-- **THEN** only the files its previous run recorded are replaced, and the files recorded by the other sample's run are unchanged
+#### Scenario: Rerun
+- **WHEN** a result commit is rerun in a fresh clone
+- **THEN** the same outputs are produced from the recorded inputs and container
