@@ -39,25 +39,32 @@
 - [x] 6.3 `faire run --task` and `--all` (re-check, input retrieval, containers-run, commit, merge, push with retries, content push); verify concurrent-push and no-longer-due scenarios with two local clones
 - [x] 6.4 `faire test` (direct execution, worktree-clean check, blocking/advisory, waived patterns via `FAIRE_WAIVED`); verify the check-modifies-files scenario
 - [x] 6.5 `faire plan` with neutral output and `--ci-render gitlab|github`; verify rendered output against golden files for the ordered-chain case
-- [x] 6.6 `faire replan` with loop guard; verify next-wave and loop scenarios with the fake platform
+- [x] 6.6 `faire replan` with loop guard; verify next-wave and loop scenarios with the fake platform (superseded by 8.4)
 - [x] 6.7 Document rule and check keys in `docs/rules.md`; verify the reference template matches the documentation
 
 ## 7. Lifecycle
 
-- [x] 7.1 Downstream trigger: create session branches and draft pull requests, bump pending streams on open branches; verify new-session and late-stream scenarios with the fake platform
+- [x] 7.1 Downstream trigger: create session branches and draft pull requests, bump pending streams on open branches; verify new-session and late-stream scenarios with the fake platform (superseded by 8.3)
 - [x] 7.2 `faire status` writing `sessions.tsv`/`participants.tsv` and sidecar levels as a recorded step; built-in completeness check; verify status and pending scenarios
 - [x] 7.3 `faire mark` (partial vs missing, reviewer recorded) and the rendered manual job; verify the partial-physio scenario
 - [x] 7.4 Pilot base branch through trigger, branch creation and pull request target; verify pilot isolation
 
-## 8. Distribution and release
+## 8. Rework: superdataset as a dataset, `base` branch, single CI entry
 
-- [x] 8.1 `faire sync --stage` with `wanted`, credentials from environment, resumability; verify accepted, excluded-content and interrupted scenarios with local remotes
-- [x] 8.2 Release remote creation inferred from URL (RIA, plain, `datalad-annex`, GitLab via adapter); verify first-use creation for RIA and plain siblings
-- [ ] 8.3 `faire release` on `rel/*` (pointer bump, ancestry, completeness report, release checks, sync, reachability) and tagging on merge to `main`; verify each release scenario and that no tag exists on failure
-- [ ] 8.4 Verify a released tree installs from release remotes with the platform unreachable
-- [ ] 8.5 Document stages, branches and release in `docs/lifecycle.md`
+- [ ] 8.1 Profile and init: superdataset is the dataset with path `.` (schema, validation, example, `docs/profile.md`), rendered and registered like any dataset; drop `dmp.faire.superdataset`; verify the superdataset-profile and init scenarios
+- [ ] 8.2 Streams on `dev` only, pilot items marked by a `faire-pilot` trailer; per-sample fingerprints looking inside source subdatasets; verify pilot-marking, source-moved and other-samples-arrived scenarios
+- [ ] 8.3 `base` as default branch created by init, and the `update` task (pointers on `base`, merge into `dev`, `pilot` and open branches, open sessions from `base`, recompute on concurrent update); remove `faire sessions`; verify new-session, late-stream, rule-fixed, session-diff and pilot-isolation scenarios with the fake platform
+- [ ] 8.4 `faire plan` deciding from the branch, loop guard in plan, `status` starting the next wave, checks only when nothing is due, native downstream triggers; remove `faire trigger`, `faire replan` and `FAIRE_DOWNSTREAM`; ship a fixed CI configuration in the reference templates; update golden files and `docs/rules.md`, `docs/gitlab.md`; verify render, nothing-due, loop and next-wave scenarios
 
-## 9. Integration
+## 9. Distribution and release
 
-- [ ] 9.1 End-to-end local run on the example ma-DMP with the fake platform: init, index two streams at different times, plan/run waves, mark, merge, cascade to a derivative, release; verify final tags and remote contents
-- [ ] 9.2 End-to-end on a GitLab test instance using rendered pipelines; verify one session reaches a release tag
+- [x] 9.1 `faire sync --stage` with `wanted`, credentials from environment, resumability; verify accepted, excluded-content and interrupted scenarios with local remotes
+- [x] 9.2 Release remote creation inferred from URL (RIA, plain, `datalad-annex`, GitLab via adapter); verify first-use creation for RIA and plain siblings
+- [ ] 9.3 `faire release` on `rel/*` (pointer bump, ancestry, completeness report, release checks, sync, reachability) and tagging on merge to `main`; verify each release scenario and that no tag exists on failure
+- [ ] 9.4 Verify a released tree installs from release remotes with the platform unreachable
+- [ ] 9.5 Document stages, branches and release in `docs/lifecycle.md`
+
+## 10. Integration
+
+- [ ] 10.1 End-to-end local run on the example ma-DMP with the fake platform: init, index two streams at different times, plan/run waves, mark, merge, cascade to a derivative, release; verify final tags and remote contents
+- [ ] 10.2 End-to-end on a GitLab test instance using rendered pipelines; verify one session reaches a release tag

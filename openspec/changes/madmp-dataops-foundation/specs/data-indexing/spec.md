@@ -25,12 +25,12 @@ Files attributed to an instrument not declared in the ma-DMP SHALL NOT be indexe
 - **WHEN** the heuristic returns an instrument absent from the plan
 - **THEN** indexing fails naming it and nothing is committed
 
-### Requirement: Pilot routing
-Items the heuristic marks as pilot SHALL be committed to the `pilot` branch instead of `dev`.
+### Requirement: Pilot marking
+Streams SHALL have a single `dev` branch. An item the heuristic marks as pilot SHALL be committed there like any other, with a trailer marking its sample as pilot.
 
 #### Scenario: Pilot session
 - **WHEN** `pilot` returns true for an item
-- **THEN** it is committed to `pilot` and `dev` is unchanged
+- **THEN** it is committed to `dev` and the commit marks its sample as pilot
 
 ### Requirement: Content before history
 Annexed content SHALL be pushed to the stream's `collection` remotes before its history is pushed, so a pushed commit never references unavailable content.

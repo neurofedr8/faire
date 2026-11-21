@@ -44,7 +44,7 @@ For each distribution at stage `collection` or `accepted`, init SHALL configure 
 - **THEN** the dataset has a remote for it with that preferred-content expression
 
 ### Requirement: Study superdataset
-Init SHALL render the superdataset from its template, register every dataset that declares a path at that path, track the ma-DMP file, and record subdataset URLs as relative URLs. Datasets without a path SHALL NOT be registered.
+The superdataset is the dataset with path `.`, rendered like any other. Init SHALL register in it every dataset that declares a path at that path, track the ma-DMP file there, and record subdataset URLs as relative URLs. Datasets without a path SHALL NOT be registered.
 
 #### Scenario: Whole project from one clone
 - **WHEN** the superdataset is cloned and its subdatasets installed
@@ -61,8 +61,12 @@ With a platform configured, init SHALL create a repository per dataset at `<grou
 - **WHEN** init runs without a platform
 - **THEN** the same datasets, links and remotes exist locally and no platform request is made
 
-### Requirement: Platform policies
-Init SHALL protect `dev`, `pilot` and `convert/*`, require one approval to merge, forbid squash merges, and give each dataset the list of datasets to trigger on merge.
+### Requirement: Branches and platform policies
+Init SHALL create `base` as the default branch of each standard and derived dataset, with `dev` and `pilot` starting from it. It SHALL protect `base`, `dev`, `pilot` and session branches, require one approval to merge a session, and forbid squash merges.
+
+#### Scenario: Base branch
+- **WHEN** init creates `bids`
+- **THEN** `base` is its default branch, holding the rendered template and source pointers, and `dev` and `pilot` start from it
 
 #### Scenario: Squash forbidden
 - **WHEN** init configures a dataset repository

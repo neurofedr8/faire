@@ -19,7 +19,7 @@ Each dataset SHALL have a `dataset_id` unique within the document. That identifi
 - **THEN** validation fails and names it
 
 ### Requirement: Dataset template
-Each dataset SHALL declare its template: a git repository, a pinned version, and optional template data. The `dmp` SHALL declare the template of the study superdataset in the same form.
+Each dataset SHALL declare its template: a git repository, a pinned version, and optional template data.
 
 #### Scenario: Unpinned template
 - **WHEN** a dataset's template has no version
@@ -35,6 +35,17 @@ A dataset MAY declare a relative path in the study superdataset. Path segments S
 #### Scenario: Dot in a segment
 - **WHEN** a dataset declares path `derivatives/fmri.prep`
 - **THEN** validation fails and names the dataset
+
+### Requirement: Study superdataset
+The study superdataset SHALL be a dataset of the plan declaring path `.`. At most one dataset SHALL declare it; it SHALL have no sources and no instruments, and it SHALL exist when any other dataset declares a path. Its distributions follow the same rules as any dataset's.
+
+#### Scenario: Superdataset with annexed content
+- **WHEN** the dataset with path `.` declares a `release` distribution with a RIA URL
+- **THEN** validation succeeds and the superdataset's history and wanted content go to that store
+
+#### Scenario: Paths without a superdataset
+- **WHEN** datasets declare paths and none declares `.`
+- **THEN** validation fails
 
 ### Requirement: Sources
 A dataset derived from datasets of the plan SHALL declare each source with the standard's `related_identifier`, relation type `IsDerivedFrom`, and the source's `dataset_id`. These links SHALL form a directed acyclic graph. Links whose identifier matches no dataset of the plan and uses an external identifier type (for example a DOI) are not sources.

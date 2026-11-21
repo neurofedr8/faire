@@ -5,22 +5,44 @@ Defines how data moves through branches and stages: one reviewed pull request pe
 ## ADDED Requirements
 
 ### Requirement: Branches and stages
-Datasets SHALL use `dev` for accepted data, `pilot` for pilot data (never merged into `dev`) and `convert/<sample>` for sessions under review. The superdataset SHALL use `dev`, `rel/<version>` and `main`. Stage `collection` covers stream branches and session branches, `accepted` covers `dev` of standard and derived datasets, and `release` covers `rel/*` branches of the superdataset.
+Streams SHALL have a single `dev` branch. Standard and derived datasets SHALL use `base` for source pointers and configuration (template content, rules, checks), `dev` for accepted data, `pilot` for pilot data (never merged into `dev`), and `convert/<sample>` or `convert-pilot/<sample>`, started from `base`, for sessions under review. The superdataset SHALL use `dev`, `rel/<version>` and `main`.
 
 #### Scenario: Pilot isolation
-- **WHEN** a pilot session is converted
-- **THEN** its branch starts from and targets `pilot`, and `dev` is unchanged
+- **WHEN** a sample marked pilot is converted
+- **THEN** its branch `convert-pilot/<sample>` starts from `base` and targets `pilot`, and `dev` is unchanged
 
-### Requirement: Downstream trigger
-A push to `dev` or `pilot` of a stream, and a merge into `dev` or `pilot` of a dataset, SHALL trigger every dataset listing it as a source. A triggered dataset SHALL create `convert/<sample>` with a draft pull request for each sample of a primary source having no run record and no open branch, and SHALL bump the source pointer on every open branch whose status for that source is `pending`.
+#### Scenario: Session diff
+- **WHEN** a session pull request is opened
+- **THEN** its changes against `dev` are only that sample's outputs and status
+
+### Requirement: Stages
+Stage `collection` SHALL cover stream `dev` and session branches, `accepted` the `dev` branches of standard, derived and superdataset, and `release` the `rel/*` branches of the superdataset.
+
+#### Scenario: Accepted superdataset
+- **WHEN** the superdataset declares an `accepted` distribution
+- **THEN** its `dev` is synced there
+
+### Requirement: Downstream update
+A push to `dev` of a stream or a session merge into `dev` SHALL start `update` on `base` of every dataset derived from it; a push to `base` SHALL start its own. `update` SHALL commit the source pointers at their sources' `dev` heads on `base`, recomputing them on the latest `base` when another update pushed first, then merge `base` into `dev`, `pilot` and every open session branch, and open sessions.
 
 #### Scenario: New session
 - **WHEN** session `sub-01 ses-001` is indexed in `dicoms`
-- **THEN** `bids` has branch `convert/sub-01_ses-001` and a draft pull request
+- **THEN** `bids` `base` points at the new `dicoms` commit, and `bids` has branch `convert/sub-01_ses-001` and a draft pull request
 
 #### Scenario: Late stream
 - **WHEN** physio is indexed while two `bids` branches have `physio` pending
-- **THEN** both branches get the new `sourcedata/physio` pointer
+- **THEN** `base` is merged into both, which then see the new physio files
+
+#### Scenario: Rule fixed
+- **WHEN** a rule's command is changed on `base`
+- **THEN** `update` merges the change into every open session branch
+
+### Requirement: Session opening
+`update` SHALL open `convert/<sample>`, or `convert-pilot/<sample>` for a sample indexed as pilot, with a draft pull request, for each sample of a primary source having no run record on its target branch and no open branch.
+
+#### Scenario: Already converted
+- **WHEN** a sample's session was merged into `dev`
+- **THEN** no branch is opened for it again
 
 ### Requirement: Session status
 faire SHALL maintain per-subject `sessions.tsv` and `participants.tsv` columns, one per source stream, with values `present`, `pending`, `partial` or `missing`, described with their levels in the JSON sidecar, and record each update as a re-executable step. A column is `pending` until a rule consuming that stream produced output for the sample.
