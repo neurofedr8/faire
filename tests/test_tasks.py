@@ -149,26 +149,58 @@ def test_render_golden():
              T.Task("deface:s", "deface", "s", ("unwarp:s",), "gpu")]
     checks = [Check("validate", True, ("collection",), "check ."),
               Check("summary", False, ("collection",), "summary .")]
-    assert T.render_gitlab(tasks, checks, "collection") == (GOLDEN / "gitlab.yml").read_text()
-    assert T.render_github(tasks, checks) + "\n" == (GOLDEN / "github.json").read_text()
+    wave = T.Pipeline(tasks=tasks)
+    settled = T.Pipeline(checks=checks, pending=("physio",))
+    for name, pipe in [("wave", wave), ("settled", settled)]:
+        assert T.render_gitlab(pipe) == (GOLDEN / f"gitlab-{name}.yml").read_text()
+        assert T.render_github(pipe) + "\n" == (GOLDEN / f"github-{name}.json").read_text()
 
 
-def test_replan_and_loop_guard(project, tmp_path):
+def test_render_wave_and_settled():
+    tasks = [T.Task("unwarp:s", "unwarp", "s"), T.Task("deface:s", "deface", "s", ("unwarp:s",))]
+    text = T.render_gitlab(T.Pipeline(tasks=tasks))
+    assert "faire status --next-wave" in text and "faire test" not in text
+    text = T.render_gitlab(T.Pipeline(checks=[Check("validate", True, ("collection",), "")],
+                                      pending=("physio",)))
+    assert "faire test --stage collection --check 'validate'" in text
+    assert "faire mark 'physio=missing'" in text and "when: manual" in text
+    assert "faire run" not in text
+
+
+def test_branch_decides(project, tmp_path):
+    ds = clone(source=str(project.path("rawdata")), path=str(tmp_path / "c"),
+               result_renderer="disabled")
+    assert T.pipeline(ds, "base").jobs == [("update", "faire run --task update")]
+    dev = T.pipeline(ds, "dev", downstream=("lab/study/derivatives/x",), sync=True)
+    assert dev.jobs == [("sync-accepted", "faire sync --stage accepted")]
+    assert dev.downstream == ("lab/study/derivatives/x",)
+    assert T.pipeline(ds, "pilot", downstream=("lab/study/derivatives/x",)).downstream == ()
+    text = T.render_gitlab(dev)
+    assert "trigger:\n    project: lab/study/derivatives/x\n    branch: base" in text
+    assert T.downstream_paths("lab/study/sourcedata/dicoms/a_X", "sourcedata/dicoms/a_X",
+                              ["rawdata"]) == ("lab/study/rawdata",)
+
+
+def test_next_wave_and_loop_guard(project, tmp_path):
     ds = session(project, tmp_path, "05")
     platform = FakePlatform(tmp_path / "platform")
     repo = platform.ensure_repository("lab/study/rawdata")
     T.publish(ds, "convert/subject-05_session-a")
     since = ds.repo.get_hexsha()
-    assert T.replan(ds, since, platform, repo) == "nothing new"
+    assert T.next_wave(ds, since, platform, repo) == "settled"
     T.run_task(ds, "convert:subject-05_session-a")
-    assert T.replan(ds, since, platform, repo) == "started pipeline 1"
+    assert T.next_wave(ds, since, platform, repo) == "started pipeline 1"
     assert platform.pipelines == [("lab/study/rawdata", "convert/subject-05_session-a", {})]
+    # nothing due: the session pipeline runs the checks
+    T.run_all(ds)
+    settled = T.pipeline(ds, "convert/subject-05_session-a")
+    assert not settled.tasks and "completeness" in [c.name for c in settled.checks]
     for _ in range(2):
         ds.repo.call_git(["commit", "-q", "--allow-empty", "-m",
                           "faire: deface x\n\nfaire-rule: deface\n"
                           "faire-sample: subject-05_session-a"])
     with pytest.raises(T.TaskError, match="deface ran twice"):
-        T.replan(ds, since, platform, repo)
+        T.plan(ds)
 
 
 def test_cli_plan(project, tmp_path):

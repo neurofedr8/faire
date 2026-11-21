@@ -1,0 +1,21 @@
+{
+ "jobs": [],
+ "levels": [],
+ "status": false,
+ "checks": {
+  "include": [
+   {
+    "check": "validate",
+    "blocking": true
+   },
+   {
+    "check": "summary",
+    "blocking": false
+   }
+  ]
+ },
+ "pending": [
+  "physio"
+ ],
+ "downstream": []
+}

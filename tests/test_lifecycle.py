@@ -167,19 +167,3 @@ def test_pilot_isolation(project, tmp_path, platform):
     assert ds.repo.get_hexsha() == origin.repo.get_hexsha("base")
     T.run_all(ds)
     assert origin.repo.get_hexsha("dev") == dev_before
-
-
-def test_trigger(tmp_path):
-    fake = FakePlatform(tmp_path / "p")
-    fake.ensure_repository("lab/study/rawdata")
-    fake.ensure_repository("lab/study/derivatives/x")
-    lines = L.trigger("lab/study/rawdata, lab/study/derivatives/x", "dev", fake, "lab/study/up")
-    assert len(lines) == 2
-    assert fake.pipelines[0] == ("lab/study/rawdata", "base", {
-        "FAIRE_TRIGGERED_BY": "lab/study/up", "FAIRE_UPSTREAM_REF": "dev"})
-
-
-def test_manual_mark_job():
-    text = T.render_gitlab([], [], "collection", pending=("physio",))
-    assert "mark-missing-physio:" in text and "when: manual" in text
-    assert "faire mark 'physio=missing'" in text

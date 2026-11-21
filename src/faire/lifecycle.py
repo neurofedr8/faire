@@ -1,5 +1,5 @@
-"""Session lifecycle: the ``update`` task on ``base``, status of each source stream, reviewer
-waivers, and triggering downstream datasets.
+"""Session lifecycle: the ``update`` task on ``base``, status of each source stream and
+reviewer waivers.
 
 The status table is a TSV with one row per sample and one column per source of the dataset.
 Its location comes from the dataset's configuration (defaults are BIDS-like)::
@@ -181,7 +181,8 @@ def write_status(ds: Dataset, label: str, values: dict[str, str]) -> list[str]:
 
 
 def record_status(ds: Dataset, push: bool = True) -> bool:
-    """Update the status of the branch's sample as a recorded, re-executable step."""
+    """Update the status of the branch's sample as a recorded, re-executable step; its push
+    ends a wave and starts the next pipeline."""
     branch = active_branch(ds)
     label = sample_of(branch)
     if label is None:
@@ -193,7 +194,7 @@ def record_status(ds: Dataset, push: bool = True) -> bool:
            result_renderer="disabled")
     changed = ds.repo.get_hexsha() != before
     if changed and push:
-        publish(ds, branch)
+        publish(ds, branch, ci=True)
     return changed
 
 
@@ -211,7 +212,7 @@ def mark(ds: Dataset, stream: str, by: str, push: bool = True) -> str:
                                  f"faire-marked: {stream}={value}\nfaire-marked-by: {by}"),
             result_renderer="disabled")
     if push:
-        publish(ds, branch)
+        publish(ds, branch, ci=True)  # the pipeline of the new head runs the checks
     return value
 
 
@@ -373,19 +374,6 @@ def update(ds: Dataset, platform=None, repository=None) -> list[str]:
     ds.repo.call_git(["checkout", "-q", original or BASE])
     checkout_sources(ds)
     return lines
-
-
-def trigger(downstream: str, ref: str, platform, triggered_by: str) -> list[str]:
-    """Start a pipeline on ``base`` of each downstream repository (comma-separated paths)."""
-    out = []
-    for path in filter(None, (p.strip() for p in downstream.split(","))):
-        repo = platform.get_repository(path)
-        if repo is None:
-            raise LifecycleError(f"downstream repository {path!r} does not exist")
-        pid = platform.start_pipeline(repo, BASE, {"FAIRE_TRIGGERED_BY": triggered_by,
-                                                   "FAIRE_UPSTREAM_REF": ref})
-        out.append(f"triggered {path} (pipeline {pid})")
-    return out
 
 
 def reviewer() -> str:

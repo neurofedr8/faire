@@ -143,33 +143,59 @@ def _dataset(path: str):
     return Dataset(path)
 
 
+def _dataset_plan(ds):
+    """(plan, unit) of a dataset clone, from the ma-DMP it tracks; (None, None) without one."""
+    from pathlib import Path
+
+    from faire import layout
+    from faire.plan import Plan, load_document
+    from faire.project import DATASET_ID, DMP_COPY, DMP_FILE, INSTANCE
+
+    for name in (DMP_COPY, DMP_FILE):
+        path = Path(ds.path) / name
+        if path.is_file():
+            plan = Plan.from_document(load_document(path))
+            ident, instance = ds.config.get(DATASET_ID), ds.config.get(INSTANCE)
+            unit = next((u for u in layout.units(plan) if u.dataset.id == ident and
+                         (u.instrument.instance if u.instrument else None) == instance), None)
+            return plan, unit
+    return None, None
+
+
 @main.command("plan")
 @click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
 @click.option("--ci-render", type=click.Choice(["gitlab", "github"]),
               help="Emit a CI-native pipeline instead of the neutral task list.")
-@click.option("--stage", default="collection", help="Stage whose checks the pipeline runs.")
-def plan_cmd(dataset_path, ci_render, stage) -> None:
-    """List the due tasks of the current session branch."""
-    from faire import lifecycle as L
+@click.option("--stage", default="collection", help="Stage whose checks a session runs.")
+@click.option("--project-path", envvar="CI_PROJECT_PATH",
+              help="Platform path of this repository (default: CI_PROJECT_PATH).")
+def plan_cmd(dataset_path, ci_render, stage, project_path) -> None:
+    """Say what a pipeline does on the current branch (tasks of a session by default)."""
+    import os
+
+    from faire import layout
     from faire import tasks as T
-    from faire.rules import Check
-    from faire.state import sample_of
 
     ds = _dataset(dataset_path)
-    found = T.plan(ds)
-    checks = T.check_list(ds, stage)
-    branch = ds.repo.get_active_branch() or ""
-    label = sample_of(branch)
-    pending: tuple[str, ...] = ()
-    if label and stage == "collection":
-        checks.append(Check(L.COMPLETENESS, True, ("collection",), ""))
-        pending = tuple(s for s, v in L.compute(ds, label, branch).items() if v == L.PENDING)
+    branch = ds.repo.get_active_branch() or os.environ.get("CI_COMMIT_REF_NAME", "")
+    plan, unit = _dataset_plan(ds)
+    downstream: tuple[str, ...] = ()
+    sync = False
+    if plan and unit:
+        targets = [layout.logical_path(d) for d in plan.derived_from(unit.dataset.id)]
+        downstream = (T.downstream_paths(project_path, unit.logical, targets)
+                      if project_path else tuple(targets))
+        sync = bool(unit.dataset.distributions_at("accepted"))
+    try:
+        pipe = T.pipeline(ds, branch, stage, downstream, sync)
+    except T.TaskError as exc:
+        raise click.ClickException(str(exc)) from exc
     if ci_render == "gitlab":
-        click.echo(T.render_gitlab(found, checks, stage, pending), nl=False)
+        click.echo(T.render_gitlab(pipe), nl=False)
     elif ci_render == "github":
-        click.echo(T.render_github(found, checks))
+        click.echo(T.render_github(pipe))
     else:
-        click.echo(T.as_json(found))
+        click.echo(T.as_json(pipe.tasks))
 
 
 @main.command("run")
@@ -260,27 +286,15 @@ def _platform_from_env():
     return platform, platform.get_repository(path)
 
 
-@main.command("replan")
-@click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
-@click.option("--since", envvar="CI_COMMIT_SHA", required=True,
-              help="Commit the pipeline ran for (default: CI_COMMIT_SHA).")
-def replan_cmd(dataset_path, since) -> None:
-    """Start the next wave when the branch moved during this pipeline."""
-    from faire import tasks as T
-
-    platform, repo = _platform_from_env()
-    try:
-        click.echo(T.replan(_dataset(dataset_path), since, platform, repo))
-    except T.TaskError as exc:
-        raise click.ClickException(str(exc)) from exc
-
-
 @main.command("status")
 @click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
 @click.option("--write", is_flag=True,
               help="Only write the table (the recorded step run by plain `faire status`).")
 @click.option("--no-push", is_flag=True)
-def status_cmd(dataset_path, write, no_push) -> None:
+@click.option("--next-wave", is_flag=True,
+              help="End a CI wave: start the next pipeline if the branch moved since "
+                   "CI_COMMIT_SHA and recording the status did not.")
+def status_cmd(dataset_path, write, no_push, next_wave) -> None:
     """Update the source-stream status of the current session's sample."""
     from faire import lifecycle as L
     from faire.state import sample_of
@@ -298,6 +312,13 @@ def status_cmd(dataset_path, write, no_push) -> None:
         click.echo(f"{stream}: {value}")
     if not changed:
         click.echo("no change")
+        if next_wave and not no_push:
+            import os
+
+            from faire import tasks as T
+
+            platform, repo = _platform_from_env()
+            click.echo(T.next_wave(ds, os.environ.get("CI_COMMIT_SHA", ""), platform, repo))
 
 
 @main.command("mark")
@@ -319,24 +340,10 @@ def mark_cmd(assignment, dataset_path, by, no_push) -> None:
     click.echo(f"{stream}: {result}")
 
 
-@main.command("trigger")
-@click.option("--downstream", envvar="FAIRE_DOWNSTREAM", default="",
-              help="Comma-separated repositories (default: FAIRE_DOWNSTREAM).")
-@click.option("--ref", envvar="CI_COMMIT_REF_NAME", default="dev")
-def trigger_cmd(downstream, ref) -> None:
-    """Start the pipelines of the datasets derived from this one."""
-    import os
-
-    from faire import lifecycle as L
-
-    platform, _ = _platform_from_env()
-    for line in L.trigger(downstream, ref, platform, os.environ.get("CI_PROJECT_PATH", "")):
-        click.echo(line)
-
-
 @main.command("sync")
 @click.option("--stage", required=True, type=click.Choice(["collection", "accepted", "release"]))
-@click.option("--dmp", "dmp_file", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("--dmp", "dmp_file", type=click.Path(exists=True, dir_okay=False),
+              help="ma-DMP (default: the one the dataset tracks).")
 @click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
 @click.option("--distribution", "only", help="Only the distribution with this title.")
 @click.option("--ref", "refs", multiple=True,
@@ -346,13 +353,19 @@ def sync_cmd(stage, dmp_file, dataset_path, only, refs) -> None:
     from faire.distribution import SyncError, sync
     from faire.plan import Plan
 
-    doc = load_document(dmp_file)
-    if validate(doc):
-        raise click.ClickException("the ma-DMP is not valid")
     ds = _dataset(dataset_path)
+    if dmp_file:
+        doc = load_document(dmp_file)
+        if validate(doc):
+            raise click.ClickException("the ma-DMP is not valid")
+        plan = Plan.from_document(doc)
+    else:
+        plan, _ = _dataset_plan(ds)
+        if plan is None:
+            raise click.ClickException("the dataset tracks no ma-DMP; give --dmp")
     refs = list(refs) or [ds.repo.get_active_branch()]
     try:
-        for line in sync(Plan.from_document(doc), ds, stage, refs, only):
+        for line in sync(plan, ds, stage, refs, only):
             click.echo(line)
     except SyncError as exc:
         raise click.ClickException(str(exc)) from exc

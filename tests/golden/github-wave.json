@@ -1,4 +1,5 @@
 {
+ "jobs": [],
  "levels": [
   {
    "include": [
@@ -21,16 +22,10 @@
    ]
   }
  ],
+ "status": true,
  "checks": {
-  "include": [
-   {
-    "check": "validate",
-    "blocking": true
-   },
-   {
-    "check": "summary",
-    "blocking": false
-   }
-  ]
- }
+  "include": []
+ },
+ "pending": [],
+ "downstream": []
 }

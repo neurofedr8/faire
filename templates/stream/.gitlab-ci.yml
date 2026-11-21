@@ -1,0 +1,24 @@
+# faire decides what runs from the branch: `faire plan` renders a child pipeline
+# (update on base, sync and downstream triggers on dev, tasks/status or checks on sessions).
+# Fixed: do not edit per dataset. FAIRE_IMAGE is a CI variable naming an image with faire.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - when: always
+
+faire-plan:
+  image: $FAIRE_IMAGE
+  script:
+    - git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"
+    - faire plan --ci-render gitlab > faire-pipeline.yml
+  artifacts:
+    paths: [faire-pipeline.yml]
+
+faire-run:
+  needs: [faire-plan]
+  trigger:
+    include:
+      - artifact: faire-pipeline.yml
+        job: faire-plan
+    strategy: depend

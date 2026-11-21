@@ -46,3 +46,16 @@ def test_standard_template_rules_and_checks(project):
     assert found["validate"]["faire-check"] == "blocking"
     assert found["validate"]["faire-stage"] == ("collection", "release")
     assert os.path.lexists(Path(ds.path, "code/containers/images/toy-1.0.sh"))  # annexed
+
+
+def test_fixed_ci_configuration(project):
+    for logical in ("sourcedata/dicoms/a_PrismaFit16001", "rawdata", "superdataset"):
+        path = project.path(logical) / ".gitlab-ci.yml"
+        assert not path.is_symlink()  # in git
+        assert "faire plan --ci-render gitlab" in path.read_text()
+
+
+def test_tracked_dmp(project):
+    for logical in ("sourcedata/dicoms/a_PrismaFit16001", "rawdata"):
+        path = project.path(logical) / ".faire" / "dmp.json"
+        assert not path.is_symlink() and path.read_bytes() == project.dmp_file.read_bytes()

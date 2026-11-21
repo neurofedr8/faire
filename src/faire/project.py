@@ -29,8 +29,9 @@ DATASET_ID = "faire.dataset-id"
 INSTANCE = "faire.instance"
 TEMPLATE_REPOSITORY = "faire.template-repository"
 TEMPLATE_VERSION = "faire.template-version"
-DOWNSTREAM_VARIABLE = "FAIRE_DOWNSTREAM"
-DMP_FILE = "dmp.json"
+DMP_FILE = "dmp.json"  # in the superdataset, for users
+DMP_COPY = ".faire/dmp.json"  # in every other dataset, for its pipelines
+DMP_ACTION = "update the ma-DMP in"
 EARLY_STAGES = ("collection", "accepted")
 DATASET_BRANCHES = ("base", "dev", "pilot")  # the first is the default branch
 STREAM_BRANCHES = ("dev",)
@@ -81,13 +82,6 @@ class Project:
     def location(self, unit: Unit) -> str:
         return self.platform.location(unit.logical) if self.platform else unit.logical
 
-    def downstream(self, unit: Unit) -> str:
-        """Comma-separated repositories to trigger after a merge in ``unit``."""
-        return ",".join(sorted(
-            self.location(Unit(layout.logical_path(d), d))
-            for d in self.plan.derived_from(unit.dataset.id)
-        ))
-
     # -- entry point -------------------------------------------------------------------------
 
     def init(self, dry_run: bool = False) -> Report:
@@ -113,6 +107,8 @@ class Project:
                     self._reconcile_superdataset(ds, report, todo)
         report.differences += [f"{loc}: exists but is not in the plan"
                                for loc, key in unplanned.items() if key in elsewhere.keys()]
+        if report.differences:  # the copies must describe the project as it is
+            todo = [(d, a) for d, a in todo if not d.startswith(DMP_ACTION)]
         report.actions = [desc for desc, _ in todo]
         report.local = [desc for desc, _ in setup]
         if not dry_run:
@@ -175,8 +171,7 @@ class Project:
     def _create(self, unit: Unit) -> None:
         template = unit.dataset.template
         path = self.path(unit)
-        branches = (SUPERDATASET_BRANCHES if unit.is_superdataset
-                    else STREAM_BRANCHES if unit.instrument else DATASET_BRANCHES)
+        branches = _branches(unit)
         with tempfile.TemporaryDirectory() as tmp:
             rendered = Path(tmp) / "rendered"
             templates.render(template, rendered, self._context(unit))  # fails before creating
@@ -200,6 +195,7 @@ class Project:
             self._install_source(ds, unit, sub, src)
         if unit.is_superdataset:
             self._populate_superdataset(ds)
+        self._write_dmp(unit, ds)
         for spec in self._remote_specs(unit):
             remotes.create(ds, spec)
         for branch in branches[1:]:
@@ -242,14 +238,32 @@ class Project:
     def _populate_superdataset(self, sup: Dataset) -> None:
         for unit in layout.registered(self.plan):
             self._register(sup, unit)
-        self._write_dmp(sup)
 
-    def _register(self, sup: Dataset, unit: Unit) -> None:
-        self._install_source(sup, layout.superdataset(self.plan), unit.dataset.path, unit)
+    def _register(self, sup: Dataset, unit: Unit, push: bool = False) -> None:
+        sup_unit = layout.superdataset(self.plan)
+        self._install_source(sup, sup_unit, unit.dataset.path, unit)
+        if push:
+            self._push_default(sup_unit, sup)
 
-    def _write_dmp(self, sup: Dataset) -> None:
-        shutil.copyfile(self.dmp_file, Path(sup.path) / DMP_FILE)
-        sup.save(path=DMP_FILE, to_git=True, message="faire: update ma-DMP", **_quiet())
+    @staticmethod
+    def dmp_path(unit: Unit) -> str:
+        return DMP_FILE if unit.is_superdataset else DMP_COPY
+
+    def _write_dmp(self, unit: Unit, ds: Dataset, push: bool = False) -> None:
+        dest = Path(ds.path) / self.dmp_path(unit)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(self.dmp_file, dest)
+        ds.save(path=self.dmp_path(unit), to_git=True, message="faire: update ma-DMP",
+                **_quiet())
+        if push:
+            self._push_default(unit, ds)
+
+    def _push_default(self, unit: Unit, ds: Dataset) -> None:
+        """Publish a change made by reconcile on the default branch."""
+        if self.platform:
+            with self.platform.git_auth():
+                ds.repo.call_git(["push", "-q", "--no-verify", "origin",
+                                  f"HEAD:refs/heads/{_branches(unit)[0]}"])
 
     def _publish(self, unit: Unit, ds: Dataset, branches: tuple[str, ...]) -> None:
         platform = self.platform
@@ -262,8 +276,6 @@ class Project:
                         else STREAM_BRANCHES if unit.instrument else PROTECTED):
             platform.protect_branch(repo, pattern)
         platform.set_merge_policy(repo, APPROVALS)
-        if not unit.is_superdataset:
-            platform.set_variable(repo, DOWNSTREAM_VARIABLE, self.downstream(unit))
 
     # -- reconcile -----------------------------------------------------------------------------
 
@@ -294,12 +306,10 @@ class Project:
                 setup.append((f"enable remote {spec.name} of {label}", action))
             elif state == "missing":
                 todo.append((f"create remote {spec.name} of {label}", action))
-        if self.platform and not unit.is_superdataset:
-            repo = self.platform.get_repository(self.location(unit))
-            want = self.downstream(unit)
-            if repo and self.platform.get_variables(repo).get(DOWNSTREAM_VARIABLE) != want:
-                todo.append((f"set {DOWNSTREAM_VARIABLE} of {label} to {want!r}",
-                             partial(self.platform.set_variable, repo, DOWNSTREAM_VARIABLE, want)))
+        current = Path(ds.path) / self.dmp_path(unit)
+        if not current.exists() or current.read_bytes() != self.dmp_file.read_bytes():
+            todo.append((f"{DMP_ACTION} {label}",
+                         partial(self._write_dmp, unit, ds, push=True)))
 
     def _registered(self, ds: Dataset, under: str | None = None) -> dict[str, str]:
         """Registered subdatasets: path relative to ``ds`` -> DataLad dataset id."""
@@ -369,16 +379,20 @@ class Project:
                 )
             else:
                 todo.append((f"register {unit.label} at {path} in the superdataset",
-                             partial(self._register, sup, unit)))
+                             partial(self._register, sup, unit, push=True)))
         for path in sorted(set(registered) - set(expected)):
             report.differences.append(f"superdataset: {path} is not in the plan")
-        current = Path(sup.path) / DMP_FILE
-        if not current.exists() or current.read_bytes() != self.dmp_file.read_bytes():
-            todo.append(("update the ma-DMP in the superdataset", partial(self._write_dmp, sup)))
 
     def _uuid(self, unit: Unit) -> str | None:
         path = self.path(unit)
         return Dataset(path).id if (path / ".datalad").is_dir() else None
+
+
+def _branches(unit: Unit) -> tuple[str, ...]:
+    """Branches created for ``unit``; the first is the default branch."""
+    if unit.is_superdataset:
+        return SUPERDATASET_BRANCHES
+    return STREAM_BRANCHES if unit.instrument else DATASET_BRANCHES
 
 
 def _key(unit: Unit) -> tuple[str, str | None]:

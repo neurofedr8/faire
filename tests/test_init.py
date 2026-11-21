@@ -153,9 +153,7 @@ def test_platform_repositories(env):
     entry = platform.entry(bids)
     assert entry.protected == {"base", "dev", "pilot", "convert/*", "convert-pilot/*"}
     assert entry.approvals == 1
-    assert entry.variables[P.DOWNSTREAM_VARIABLE] == "lab/study/derivatives/fmriprep"
-    dicoms = platform.get_repository("lab/study/sourcedata/dicoms/a_PrismaFit16001")
-    assert platform.entry(dicoms).variables[P.DOWNSTREAM_VARIABLE] == "lab/study/rawdata"
+    assert entry.variables == {}  # downstream comes from the tracked ma-DMP
     sup = clone(source=platform.get_repository("lab/study/superdataset").url,
                 path=str(env.root / "user"), result_renderer="disabled")
     sup.get("derivatives/fmriprep", get_data=False, result_renderer="disabled")
@@ -199,14 +197,18 @@ def test_dry_run(created, env):
 
 def test_new_derivative(created, env):
     doc, proj, _ = created
-    before = {u: commits(proj.path(u)) for u in UNITS if u != "superdataset"}
+    before = {u: Dataset(proj.path(u)).repo.get_hexsha() for u in UNITS
+              if u != "superdataset"}
     doc["dmp"]["dataset"].append(env.dataset("mriqc", "MRIQC", env.derived_tpl,
                                              path="derivatives/mriqc", sources=["bids"]))
     _, report = run(env, doc)
     assert report.differences == []
     assert "create mriqc at derivatives/mriqc" in report.actions
     assert "register mriqc at derivatives/mriqc in the superdataset" in report.actions
-    assert {u: commits(proj.path(u)) for u in before} == before
+    for u, sha in before.items():  # existing datasets only get the new ma-DMP copy
+        ds = Dataset(proj.path(u))
+        changed = ds.repo.call_git(["diff", "--name-only", sha, "HEAD"]).split()
+        assert changed == [P.DMP_COPY]
     assert proj.path("derivatives/mriqc/sourcedata/bids").is_dir()
 
 

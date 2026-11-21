@@ -30,13 +30,22 @@ run would do.
 
 ## What init configures on each project
 
-- Protected branches: `dev`, `pilot` and `convert/*` for datasets; `dev`, `main` and `rel/*`
-  for the superdataset. Protection also exposes protected CI variables to session branches.
+- Default branch `base` for standard and derived datasets, `dev` for streams and the
+  superdataset.
+- Protected branches: `base`, `dev`, `pilot`, `convert/*` and `convert-pilot/*` for datasets;
+  `dev` for streams; `dev`, `main` and `rel/*` for the superdataset. Protection also exposes
+  protected CI variables to session branches.
 - Merge policy: merge commits only (no squash, no rebase, so run records survive), a passing
   pipeline, and one approval through an approval rule named `faire: human approval`.
   Approval rules need a GitLab tier that provides them.
-- CI variable `FAIRE_DOWNSTREAM`: the projects to trigger after a merge, derived from the
-  ma-DMP. Re-running init updates it when a derivative is added.
+- A copy of the ma-DMP in `.faire/dmp.json` (`dmp.json` in the superdataset), from which
+  pipelines derive distributions and the downstream projects to trigger. Re-running init
+  updates it after an edit.
+
+Pipelines need a CI variable `FAIRE_IMAGE` (an image with faire installed) and
+`FAIRE_GITLAB_TOKEN` (opening merge requests, starting the next wave). A downstream trigger
+job runs as the user who started the pipeline, who needs the Developer role on the downstream
+project.
 
 When a new instrument is added to the ma-DMP, init creates its project and opens a merge request
 `faire/register-<stream>-<instance>` on every dataset derived from the stream.

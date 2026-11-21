@@ -1,8 +1,13 @@
 stages:
+- jobs
 - tasks
 - status
 - checks
-- replan
+- downstream
+default:
+  image: $FAIRE_IMAGE
+  before_script:
+  - git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"
 task-unwarp-s:
   stage: tasks
   script:
@@ -24,30 +29,8 @@ task-deface-s:
 status:
   stage: status
   script:
-  - faire status
+  - faire status --next-wave
   needs:
   - task-unwarp-s
   - task-physio-s
   - task-deface-s
-check-validate:
-  stage: checks
-  script:
-  - faire test --stage collection --check 'validate'
-  needs:
-  - status
-  allow_failure: false
-check-summary:
-  stage: checks
-  script:
-  - faire test --stage collection --check 'summary'
-  needs:
-  - status
-  allow_failure: true
-replan:
-  stage: replan
-  script:
-  - faire replan
-  needs:
-  - status
-  - check-validate
-  - check-summary

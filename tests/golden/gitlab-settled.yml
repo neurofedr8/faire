@@ -1,0 +1,29 @@
+stages:
+- jobs
+- tasks
+- status
+- checks
+- downstream
+default:
+  image: $FAIRE_IMAGE
+  before_script:
+  - git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"
+check-validate:
+  stage: checks
+  script:
+  - faire test --stage collection --check 'validate'
+  needs: []
+  allow_failure: false
+check-summary:
+  stage: checks
+  script:
+  - faire test --stage collection --check 'summary'
+  needs: []
+  allow_failure: true
+mark-missing-physio:
+  stage: checks
+  script:
+  - faire mark 'physio=missing'
+  needs: []
+  when: manual
+  allow_failure: true

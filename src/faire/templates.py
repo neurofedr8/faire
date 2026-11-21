@@ -71,6 +71,7 @@ def merge(ds: Dataset, rendered: Path) -> None:
     # the template says
     attrs = root / ".gitattributes"
     text = attrs.read_text() if attrs.exists() else ""
-    for rule in ("**/.git* annex.largefiles=nothing", f"{ANSWERS_FILE} annex.largefiles=nothing"):
+    for rule in ("**/.git* annex.largefiles=nothing", f"{ANSWERS_FILE} annex.largefiles=nothing",
+                 ".faire/** annex.largefiles=nothing"):
         text = text.rstrip("\n") + ("\n" if text else "") + rule + "\n"
     attrs.write_text(text)

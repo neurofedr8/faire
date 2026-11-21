@@ -39,7 +39,8 @@ right after its last run. A run is a commit carrying DataLad's run record and th
 Rules of one session run in parallel. The template must ensure that rules write different
 files; files every rule might touch (e.g. `dataset_description.json`) must stay out of rule
 outputs. Two rules modifying the same file in place must be ordered with `faire-after`;
-otherwise `faire replan` stops with a message naming them.
+otherwise `faire plan` stops with a message naming them once one of them ran twice without the
+sample's source data changing.
 
 ## Checks
 
@@ -59,21 +60,38 @@ an advisory one only warns. Checks see the environment variables `FAIRE_STAGE`,
 `FAIRE_SAMPLE` and `FAIRE_WAIVED` (output patterns of streams a reviewer declared missing or
 partial, one per line).
 
-## Commands
+## Branches
 
-All act on a clone of the dataset checked out on a session branch (`convert/<sample>`,
-`convert-pilot/<sample>` for pilots), e.g. in a CI job:
+- `base` (default branch): template content, rules, checks and `sourcedata/` pointers. Upstream
+  changes land here only.
+- `convert/<sample>` and `convert-pilot/<sample>`: one per session, started from `base`, merged
+  into `dev` or `pilot` after review. Their diff is the sample's outputs and status only.
+- `dev` and `pilot`: accepted data; faire merges `base` into them without review.
+
+## Commands and CI
+
+Each template ships a fixed `.gitlab-ci.yml` that runs `faire plan --ci-render gitlab` and
+executes the child pipeline it renders. The branch decides:
+
+| Branch | Pipeline |
+|---|---|
+| `base` | `faire run --task update`: sources to their `dev` heads on `base`, `base` merged into `dev`, `pilot` and every open session, sessions opened (with draft pull requests) for new samples |
+| `dev` | `faire sync --stage accepted` when the dataset has accepted distributions; trigger the `base` pipeline of each dataset derived from this one (from the ma-DMP the dataset tracks in `.faire/dmp.json`) |
+| `pilot` | nothing: pilots are not distributed and do not cascade to derived datasets |
+| session, tasks due | `faire run --task <id>` per task (parallel, ordered by `faire-after`), then `faire status --next-wave` |
+| session, nothing due | `faire test` per check, including `completeness`, and a manual `faire mark <stream>=missing` job per pending stream |
 
 ```
-faire plan                       # due tasks as JSON
-faire plan --ci-render gitlab    # GitLab child pipeline: tasks, status, checks, replan
-faire plan --ci-render github    # matrices for GitHub Actions, one per dependency level
+faire plan                       # due tasks of the session as JSON
+faire plan --ci-render gitlab    # the GitLab child pipeline of the current branch
+faire plan --ci-render github    # inputs for GitHub Actions: jobs, task matrices, checks
 faire run --task convert:subject-01_session-a
 faire run --all                  # every wave in one process (works on any CI)
 faire test --stage collection
-faire replan                     # start the next wave when the branch moved
 ```
 
 `faire run --task` commits, pushes content to the dataset's `collection-*` remotes, then
 merges the remote branch and pushes, retrying when other tasks pushed first. On GitLab its
-pushes skip CI (`-o ci.skip`); `faire replan` starts the next pipeline once.
+pushes skip CI (`-o ci.skip`). `faire status --next-wave` ends the wave: its push starts the
+next pipeline, or, when the status did not change but the branch moved, it starts one through
+the platform. Pipelines on a settled branch run the checks.
