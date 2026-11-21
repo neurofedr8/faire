@@ -2,15 +2,15 @@
 
 ## 1. Package and spikes
 
-- [ ] 1.1 Create the `faire` package (src layout, click CLI entry point, pytest, ruff, GitHub Actions CI); verify `faire --help` runs and CI passes on an empty test suite
-- [ ] 1.2 Spike: confirm datalad-container keeps `faire-*` keys of an entry in `containers-list` output; record the result in design.md Open Questions
-- [ ] 1.3 Spike: confirm which DataLad URL schemes (`ria+`, `ssh://`, `file://`, `datalad-annex::`) can create and push a sibling through the Python API; record the result in design.md
+- [x] 1.1 Create the `faire` package (src layout, click CLI entry point, pytest, ruff, GitHub Actions CI); verify `faire --help` runs and CI passes on an empty test suite
+- [x] 1.2 Spike: confirm datalad-container keeps `faire-*` keys of an entry in `containers-list` output; record the result in design.md Open Questions
+- [x] 1.3 Spike: confirm which DataLad URL schemes (`ria+`, `ssh://`, `file://`, `datalad-annex::`) can create and push a sibling through the Python API; record the result in design.md
 
 ## 2. Profile and validation
 
-- [ ] 2.1 Vendor the RDA DMP v1.3 schema and write the `faire` profile schema; verify a minimal example validates and an extension-stripped copy validates against v1.3
-- [ ] 2.2 Implement cross-field rules (identity, paths, sources DAG, instruments, stages, URL credentials) in `faire validate`; verify one test per madmp-profile scenario
-- [ ] 2.3 Write a single-site example ma-DMP (dicoms, physio, notes, bids, fmriprep) and document the profile in `docs/profile.md`; verify `faire validate` passes on it
+- [x] 2.1 Vendor the RDA DMP v1.3 schema and write the `faire` profile schema; verify a minimal example validates and an extension-stripped copy validates against v1.3
+- [x] 2.2 Implement cross-field rules (identity, paths, sources DAG, instruments, stages, URL credentials) in `faire validate`; verify one test per madmp-profile scenario
+- [x] 2.3 Write a single-site example ma-DMP (dicoms, physio, notes, bids, fmriprep) and document the profile in `docs/profile.md`; verify `faire validate` passes on it
 
 ## 3. Init
 

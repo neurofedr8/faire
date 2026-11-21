@@ -102,4 +102,7 @@ None: nothing deployed. The `write` branch is not migrated; reusable parts are t
 ## Open Questions
 
 - Exact placeholder syntax for `faire-input`/`faire-output`/`faire-cmd` beyond `{entity}` substitution.
-- Whether datalad-container keeps unknown `faire-*` keys in `containers-list` output in all supported versions (to verify early).
+
+Resolved by spikes (datalad 1.8.0, datalad-container 1.2.6, git-annex 10.20261026):
+- datalad-container keeps unknown `faire-*` keys in `containers-list` results; multi-valued keys come back as tuples.
+- `create_sibling_ria` with `ria+file://` creates, pushes and clones by dataset id; `create_sibling` with a local path or `ssh://` URL creates a plain sibling. `create_sibling` rejects `file://` URLs, so faire converts them to paths. `datalad-annex::` URLs need the datalad-next extension, not yet a dependency.

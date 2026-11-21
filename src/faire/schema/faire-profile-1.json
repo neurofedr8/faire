@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/UNFmontreal/faire/schema/faire-profile-1.json",
+  "title": "faire profile of the RDA DMP Common Standard v1.3",
+  "description": "Constraints on the `faire` extension. A document must also be valid under the unmodified base schema; both are validated independently.",
+  "type": "object",
+  "required": ["dmp"],
+  "properties": {
+    "dmp": {
+      "type": "object",
+      "required": ["faire", "dataset"],
+      "properties": {
+        "faire": {"$ref": "#/$defs/DmpExtension"},
+        "dataset": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["faire"],
+            "properties": {
+              "dataset_id": {
+                "type": "object",
+                "properties": {"identifier": {"$ref": "#/$defs/Name"}}
+              },
+              "faire": {"$ref": "#/$defs/DatasetExtension"},
+              "technical_resource": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {"faire": {"$ref": "#/$defs/InstrumentExtension"}}
+                }
+              },
+              "distribution": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["faire", "access_url"],
+                  "properties": {
+                    "access_url": {"type": "string", "minLength": 1},
+                    "faire": {"$ref": "#/$defs/DistributionExtension"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "Name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+      "description": "Identifier usable in paths, repository and branch names"
+    },
+    "Template": {
+      "type": "object",
+      "required": ["repository", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1, "description": "Pinned tag or commit"},
+        "data": {"type": "object", "description": "Template answers passed to copier"}
+      }
+    },
+    "DmpExtension": {
+      "type": "object",
+      "required": ["sample_entities", "superdataset"],
+      "additionalProperties": false,
+      "properties": {
+        "sample_entities": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/Name"},
+          "description": "Ordered entity names identifying a sample"
+        },
+        "superdataset": {
+          "type": "object",
+          "required": ["template"],
+          "additionalProperties": false,
+          "properties": {"template": {"$ref": "#/$defs/Template"}}
+        }
+      }
+    },
+    "DatasetExtension": {
+      "type": "object",
+      "required": ["template"],
+      "additionalProperties": false,
+      "properties": {
+        "template": {"$ref": "#/$defs/Template"},
+        "path": {
+          "type": "string",
+          "description": "Relative path in the study superdataset; absent: not registered"
+        }
+      }
+    },
+    "InstrumentExtension": {
+      "type": "object",
+      "required": ["instrument_id", "site"],
+      "additionalProperties": false,
+      "properties": {
+        "instrument_id": {"$ref": "#/$defs/Name"},
+        "site": {"$ref": "#/$defs/Name"}
+      }
+    },
+    "DistributionExtension": {
+      "type": "object",
+      "required": ["stage", "wanted"],
+      "additionalProperties": false,
+      "properties": {
+        "stage": {"enum": ["collection", "accepted", "release"]},
+        "wanted": {
+          "type": "string",
+          "minLength": 1,
+          "description": "git-annex preferred-content expression"
+        }
+      }
+    }
+  }
+}

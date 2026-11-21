@@ -1,0 +1,290 @@
+{
+  "dmp": {
+    "title": "Study X: single-site example",
+    "language": "eng",
+    "created": "2026-11-21T00:00:00Z",
+    "modified": "2026-11-21T00:00:00Z",
+    "ethical_issues_exist": "yes",
+    "dmp_id": {
+      "identifier": "https://example.org/dmp/studyx",
+      "type": "url"
+    },
+    "contact": {
+      "name": "Data Steward",
+      "mbox": "steward@example.org",
+      "contact_id": {
+        "identifier": "https://orcid.org/0000-0000-0000-0000",
+        "type": "orcid"
+      }
+    },
+    "faire": {
+      "sample_entities": [
+        "subject",
+        "session"
+      ],
+      "superdataset": {
+        "template": {
+          "repository": "https://github.com/example-lab/faire-template-superdataset",
+          "version": "v0.1.0"
+        }
+      }
+    },
+    "dataset": [
+      {
+        "title": "MRI scanner exports",
+        "dataset_id": {
+          "identifier": "dicoms",
+          "type": "other"
+        },
+        "personal_data": "yes",
+        "sensitive_data": "yes",
+        "technical_resource": [
+          {
+            "name": "Siemens Prisma Fit",
+            "faire": {
+              "instrument_id": "PrismaFit16001",
+              "site": "a"
+            }
+          }
+        ],
+        "faire": {
+          "template": {
+            "repository": "https://github.com/example-lab/faire-template-stream",
+            "version": "v0.1.0"
+          }
+        },
+        "distribution": [
+          {
+            "title": "Site storage",
+            "data_access": "closed",
+            "access_url": "ria+ssh://data.example.org/project/studyx/ria",
+            "host": {
+              "title": "Lab RIA store",
+              "url": "https://data.example.org"
+            },
+            "faire": {
+              "stage": "collection",
+              "wanted": "anything"
+            }
+          }
+        ]
+      },
+      {
+        "title": "Physiological recordings",
+        "dataset_id": {
+          "identifier": "physio",
+          "type": "other"
+        },
+        "personal_data": "yes",
+        "sensitive_data": "yes",
+        "technical_resource": [
+          {
+            "name": "Biopac MP160",
+            "faire": {
+              "instrument_id": "Biopac01",
+              "site": "a"
+            }
+          }
+        ],
+        "faire": {
+          "template": {
+            "repository": "https://github.com/example-lab/faire-template-stream",
+            "version": "v0.1.0"
+          }
+        },
+        "distribution": [
+          {
+            "title": "Site storage",
+            "data_access": "closed",
+            "access_url": "ria+ssh://data.example.org/project/studyx/ria",
+            "host": {
+              "title": "Lab RIA store",
+              "url": "https://data.example.org"
+            },
+            "faire": {
+              "stage": "collection",
+              "wanted": "anything"
+            }
+          }
+        ]
+      },
+      {
+        "title": "Experimenter session notes",
+        "dataset_id": {
+          "identifier": "notes",
+          "type": "other"
+        },
+        "personal_data": "yes",
+        "sensitive_data": "yes",
+        "technical_resource": [
+          {
+            "name": "Lab electronic notebook",
+            "faire": {
+              "instrument_id": "ELN",
+              "site": "a"
+            }
+          }
+        ],
+        "faire": {
+          "template": {
+            "repository": "https://github.com/example-lab/faire-template-stream",
+            "version": "v0.1.0"
+          }
+        },
+        "distribution": [
+          {
+            "title": "Site storage",
+            "data_access": "closed",
+            "access_url": "ria+ssh://data.example.org/project/studyx/ria",
+            "host": {
+              "title": "Lab RIA store",
+              "url": "https://data.example.org"
+            },
+            "faire": {
+              "stage": "collection",
+              "wanted": "anything"
+            }
+          }
+        ]
+      },
+      {
+        "title": "Standardized MRI and physiology (BIDS)",
+        "dataset_id": {
+          "identifier": "bids",
+          "type": "other"
+        },
+        "personal_data": "yes",
+        "sensitive_data": "no",
+        "related_identifier": [
+          {
+            "identifier": "dicoms",
+            "type": "other",
+            "relation_type": "IsDerivedFrom"
+          },
+          {
+            "identifier": "physio",
+            "type": "other",
+            "relation_type": "IsDerivedFrom"
+          },
+          {
+            "identifier": "notes",
+            "type": "other",
+            "relation_type": "IsDerivedFrom"
+          }
+        ],
+        "faire": {
+          "template": {
+            "repository": "https://github.com/example-lab/faire-template-bids",
+            "version": "v0.1.0"
+          },
+          "path": "rawdata"
+        },
+        "distribution": [
+          {
+            "title": "Site storage",
+            "data_access": "closed",
+            "access_url": "ria+ssh://data.example.org/project/studyx/ria",
+            "host": {
+              "title": "Lab RIA store",
+              "url": "https://data.example.org"
+            },
+            "faire": {
+              "stage": "collection",
+              "wanted": "anything"
+            }
+          },
+          {
+            "title": "Shared storage",
+            "data_access": "closed",
+            "access_url": "ria+ssh://data.example.org/project/studyx/ria",
+            "host": {
+              "title": "Lab RIA store",
+              "url": "https://data.example.org"
+            },
+            "faire": {
+              "stage": "accepted",
+              "wanted": "not metadata=distribution-restrictions=*"
+            }
+          },
+          {
+            "title": "GIN",
+            "data_access": "open",
+            "access_url": "ssh://git@gin.g-node.org/example-lab/studyx.rawdata.git",
+            "host": {
+              "title": "GIN",
+              "url": "https://gin.g-node.org"
+            },
+            "faire": {
+              "stage": "release",
+              "wanted": "not metadata=distribution-restrictions=*"
+            }
+          }
+        ]
+      },
+      {
+        "title": "fMRIPrep preprocessing",
+        "dataset_id": {
+          "identifier": "fmriprep",
+          "type": "other"
+        },
+        "personal_data": "yes",
+        "sensitive_data": "no",
+        "related_identifier": [
+          {
+            "identifier": "bids",
+            "type": "other",
+            "relation_type": "IsDerivedFrom"
+          }
+        ],
+        "faire": {
+          "template": {
+            "repository": "https://github.com/example-lab/faire-template-fmriprep",
+            "version": "v0.1.0"
+          },
+          "path": "derivatives/fmriprep"
+        },
+        "distribution": [
+          {
+            "title": "Site storage",
+            "data_access": "closed",
+            "access_url": "ria+ssh://data.example.org/project/studyx/ria",
+            "host": {
+              "title": "Lab RIA store",
+              "url": "https://data.example.org"
+            },
+            "faire": {
+              "stage": "collection",
+              "wanted": "anything"
+            }
+          },
+          {
+            "title": "Shared storage",
+            "data_access": "closed",
+            "access_url": "ria+ssh://data.example.org/project/studyx/ria",
+            "host": {
+              "title": "Lab RIA store",
+              "url": "https://data.example.org"
+            },
+            "faire": {
+              "stage": "accepted",
+              "wanted": "not metadata=distribution-restrictions=*"
+            }
+          },
+          {
+            "title": "GIN",
+            "data_access": "open",
+            "access_url": "ssh://git@gin.g-node.org/example-lab/studyx.derivatives.fmriprep.git",
+            "host": {
+              "title": "GIN",
+              "url": "https://gin.g-node.org"
+            },
+            "faire": {
+              "stage": "release",
+              "wanted": "not metadata=distribution-restrictions=*"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
