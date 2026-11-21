@@ -119,6 +119,11 @@ class Plan:
         return [ds for ds in self.datasets.values() if dataset_id in ds.sources]
 
 
+def sample_label(entities: dict[str, str], order: tuple[str, ...]) -> str:
+    """Stable text form of a sample, e.g. ``subject-01_session-a``."""
+    return "_".join(f"{name}-{entities[name]}" for name in order)
+
+
 def source_ids(dataset: dict[str, Any], plan_ids: set[str]) -> list[str]:
     """Identifiers of the plan datasets this dataset is derived from, in declaration order."""
     return [

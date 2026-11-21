@@ -143,6 +143,10 @@ class Project:
                 dirs[:] = [d for d in dirs if d != ".git"]
         return found
 
+    def dataset(self, unit: Unit) -> Dataset | None:
+        """The unit's working dataset (cloned from the platform when missing), or None."""
+        return self._obtain(unit)
+
     def _obtain(self, unit: Unit) -> Dataset | None:
         """The unit's working dataset: local, else cloned from the platform, else None."""
         path = self.path(unit)
@@ -229,6 +233,11 @@ class Project:
         clone(source=str(self.path(src)), path=str(Path(ds.path) / sub), dataset=ds, **_quiet())
         set_submodule_url(ds, sub, self.relative_url(unit.logical, src.logical))
         ds.save(path=[".gitmodules", sub], message=f"faire: register source {sub}", **_quiet())
+
+    def remote_specs(self, unit: Unit, stages: tuple[str, ...] = EARLY_STAGES) -> list:
+        """Remotes of ``unit`` for the distributions bound to ``stages``."""
+        dists = [d for d in unit.dataset.distributions if d.stage in stages]
+        return remotes.specs(dists, unit.instrument.instance if unit.instrument else None)
 
     def _remote_specs(self, unit: Unit) -> list[remotes.RemoteSpec]:
         dists = [d for d in unit.dataset.distributions if d.stage in EARLY_STAGES]

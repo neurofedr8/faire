@@ -29,8 +29,8 @@
 
 ## 5. Indexing
 
-- [ ] 5.1 `faire index` with heuristic loading, placement, commit entities and heuristic revision, `--dry-run`; verify placement and preview scenarios
-- [ ] 5.2 Declared-instrument check, pilot routing, content before history, repeatable indexing; verify each data-indexing scenario
+- [x] 5.1 `faire index` with heuristic loading, placement, commit entities and heuristic revision, `--dry-run`; verify placement and preview scenarios
+- [x] 5.2 Declared-instrument check, pilot routing, content before history, repeatable indexing; verify each data-indexing scenario
 
 ## 6. Rules, planning and running
 

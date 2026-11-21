@@ -85,3 +85,53 @@ def init_cmd(dmp_file, workdir, platform_kind, group, platform_url, dry_run) -> 
         click.echo("no change")
     if report.differences:
         sys.exit(1)
+
+
+def _project(dmp_file: str, workdir: str, platform_kind: str, group, platform_url):
+    from faire.plan import Plan
+    from faire.project import Project
+
+    doc = load_document(dmp_file)
+    violations = validate(doc)
+    if violations:
+        for v in violations:
+            click.echo(str(v), err=True)
+        raise click.ClickException("the ma-DMP is not valid")
+    return Project(Plan.from_document(doc), dmp_file, workdir,
+                   _platform(platform_kind, group, platform_url))
+
+
+def project_options(func):
+    """Options locating the project: its ma-DMP, working directory and platform."""
+    for option in reversed([
+        click.option("--dmp", "dmp_file", required=True,
+                     type=click.Path(exists=True, dir_okay=False), help="The ma-DMP file."),
+        click.option("--workdir", type=click.Path(file_okay=False), default=".",
+                     help="Working directory holding one clone per repository."),
+        click.option("--platform", "platform_kind", type=click.Choice(["none", "gitlab"]),
+                     default="none"),
+        click.option("--group", help="Root group on the platform."),
+        click.option("--platform-url", help="Platform URL."),
+    ]):
+        func = option(func)
+    return func
+
+
+@main.command("index")
+@click.argument("stream")
+@click.argument("directory", type=click.Path(exists=True, file_okay=False))
+@project_options
+@click.option("--dry-run", is_flag=True, help="Show the heuristic's decisions only.")
+def index_cmd(stream, directory, dmp_file, workdir, platform_kind, group, platform_url,
+              dry_run) -> None:
+    """Add the received files in DIRECTORY to the sourcedata stream STREAM."""
+    from pathlib import Path
+
+    from faire.indexing import Indexer, IndexingError
+
+    project = _project(dmp_file, workdir, platform_kind, group, platform_url)
+    try:
+        for line in Indexer(project, stream).index(Path(directory), dry_run=dry_run):
+            click.echo(line)
+    except IndexingError as exc:
+        raise click.ClickException(str(exc)) from exc
