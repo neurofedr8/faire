@@ -81,8 +81,6 @@ class Project:
 
     def downstream(self, unit: Unit) -> str:
         """Comma-separated repositories to trigger after a merge in ``unit``."""
-        if unit.dataset is None:
-            return ""
         return ",".join(sorted(
             self.location(Unit(layout.logical_path(d), d))
             for d in self.plan.derived_from(unit.dataset.id)
@@ -107,10 +105,10 @@ class Project:
                 )
             elif ds is None:
                 todo.append((f"create {unit.label} at {unit.logical}", partial(self._create, unit)))
-            elif unit.dataset is None:
-                self._reconcile_superdataset(ds, report, todo)
             else:
                 self._reconcile(unit, ds, report, todo, setup)
+                if unit.is_superdataset:
+                    self._reconcile_superdataset(ds, report, todo)
         report.differences += [f"{loc}: exists but is not in the plan"
                                for loc, key in unplanned.items() if key in elsewhere.keys()]
         report.actions = [desc for desc, _ in todo]
@@ -166,8 +164,6 @@ class Project:
     # -- creation ------------------------------------------------------------------------------
 
     def _context(self, unit: Unit) -> dict[str, str]:
-        if unit.dataset is None:
-            return {"dataset_id": layout.SUPERDATASET, "title": "Study superdataset"}
         ctx = {"dataset_id": unit.dataset.id, "title": unit.dataset.title}
         if unit.instrument:
             ctx |= {"site": unit.instrument.site, "instrument_id": unit.instrument.instrument_id,
@@ -175,7 +171,7 @@ class Project:
         return ctx
 
     def _create(self, unit: Unit) -> None:
-        template = (unit.dataset.template if unit.dataset else self.plan.superdataset_template)
+        template = unit.dataset.template
         path = self.path(unit)
         with tempfile.TemporaryDirectory() as tmp:
             rendered = Path(tmp) / "rendered"
@@ -184,8 +180,7 @@ class Project:
             try:
                 ds.repo.call_git(["branch", "-M", "dev"])
                 templates.merge(ds, rendered)
-                ds.config.set(DATASET_ID, unit.dataset.id if unit.dataset else layout.SUPERDATASET,
-                              scope="branch", reload=False)
+                ds.config.set(DATASET_ID, unit.dataset.id, scope="branch", reload=False)
                 if unit.instrument:
                     ds.config.set(INSTANCE, unit.instrument.instance, scope="branch", reload=False)
                 ds.config.set(TEMPLATE_REPOSITORY, template.repository, scope="branch",
@@ -197,15 +192,13 @@ class Project:
             except Exception:
                 shutil.rmtree(path, ignore_errors=True)
                 raise
-        if unit.dataset is None:
+        for sub, src in layout.source_links(self.plan, unit.dataset):
+            self._install_source(ds, unit, sub, src)
+        if unit.is_superdataset:
             self._populate_superdataset(ds)
-            branches = SUPERDATASET_BRANCHES
-        else:
-            for sub, src in layout.source_links(self.plan, unit.dataset):
-                self._install_source(ds, unit, sub, src)
-            for spec in self._remote_specs(unit):
-                remotes.create(ds, spec)
-            branches = DATASET_BRANCHES
+        for spec in self._remote_specs(unit):
+            remotes.create(ds, spec)
+        branches = SUPERDATASET_BRANCHES if unit.is_superdataset else DATASET_BRANCHES
         for branch in branches[1:]:
             ds.repo.call_git(["branch", branch, "dev"])
         if self.platform:
@@ -244,13 +237,12 @@ class Project:
         return remotes.specs(dists, unit.instrument.instance if unit.instrument else None)
 
     def _populate_superdataset(self, sup: Dataset) -> None:
-        for unit in layout.units(self.plan):
-            if unit.dataset is not None and unit.dataset.path:
-                self._register(sup, unit)
+        for unit in layout.registered(self.plan):
+            self._register(sup, unit)
         self._write_dmp(sup)
 
     def _register(self, sup: Dataset, unit: Unit) -> None:
-        self._install_source(sup, Unit(layout.SUPERDATASET), unit.dataset.path, unit)
+        self._install_source(sup, layout.superdataset(self.plan), unit.dataset.path, unit)
 
     def _write_dmp(self, sup: Dataset) -> None:
         shutil.copyfile(self.dmp_file, Path(sup.path) / DMP_FILE)
@@ -263,10 +255,10 @@ class Project:
             ds.repo.call_git(["remote", "add", "origin", repo.url])
         with platform.git_auth():
             ds.repo.call_git(["push", "origin", *branches, "git-annex"])
-        for pattern in SUPERDATASET_PROTECTED if unit.dataset is None else PROTECTED:
+        for pattern in SUPERDATASET_PROTECTED if unit.is_superdataset else PROTECTED:
             platform.protect_branch(repo, pattern)
         platform.set_merge_policy(repo, APPROVALS)
-        if unit.dataset is not None:
+        if not unit.is_superdataset:
             platform.set_variable(repo, DOWNSTREAM_VARIABLE, self.downstream(unit))
 
     # -- reconcile -----------------------------------------------------------------------------
@@ -298,7 +290,7 @@ class Project:
                 setup.append((f"enable remote {spec.name} of {label}", action))
             elif state == "missing":
                 todo.append((f"create remote {spec.name} of {label}", action))
-        if self.platform:
+        if self.platform and not unit.is_superdataset:
             repo = self.platform.get_repository(self.location(unit))
             want = self.downstream(unit)
             if repo and self.platform.get_variables(repo).get(DOWNSTREAM_VARIABLE) != want:
@@ -357,9 +349,7 @@ class Project:
         registered = self._registered(sup)
         by_id = {v: k for k, v in registered.items()}
         expected = {}
-        for unit in layout.units(self.plan):
-            if unit.dataset is None or not unit.dataset.path:
-                continue
+        for unit in layout.registered(self.plan):
             if unit.logical in self._moved:  # reported already; keep its current registration
                 expected[self._moved[unit.logical]] = unit
                 continue
@@ -388,8 +378,6 @@ class Project:
 
 
 def _key(unit: Unit) -> tuple[str, str | None]:
-    if unit.dataset is None:
-        return (layout.SUPERDATASET, None)
     return (unit.dataset.id, unit.instrument.instance if unit.instrument else None)
 
 

@@ -23,13 +23,15 @@ class Unit:
     """One repository to create: a dataset, a stream instance, or the superdataset."""
 
     logical: str
-    dataset: Dataset | None = None  # None for the superdataset
+    dataset: Dataset
     instrument: Instrument | None = None
 
     @property
+    def is_superdataset(self) -> bool:
+        return self.dataset.is_superdataset
+
+    @property
     def label(self) -> str:
-        if self.dataset is None:
-            return SUPERDATASET
         if self.instrument:
             return f"{self.dataset.id}/{self.instrument.instance}"
         return self.dataset.id
@@ -38,6 +40,8 @@ class Unit:
 def logical_path(dataset: Dataset, instrument: Instrument | None = None) -> str:
     if instrument is not None:
         return f"{SOURCEDATA}/{dataset.id}/{instrument.instance}"
+    if dataset.is_superdataset:
+        return SUPERDATASET
     return dataset.path or dataset.id
 
 
@@ -48,15 +52,26 @@ def units(plan: Plan) -> list[Unit]:
     for ds in plan.provenance_order():
         if ds.is_stream:
             out += [Unit(logical_path(ds, i), ds, i) for i in ds.instruments]
-        else:
+        elif not ds.is_superdataset:
             out.append(Unit(logical_path(ds), ds))
-    out.append(Unit(SUPERDATASET))
+    if plan.superdataset:
+        out.append(superdataset(plan))
     seen: dict[str, str] = {}
     for u in out:
         if u.logical in seen:
             raise LayoutError(f"{u.label} and {seen[u.logical]} would share {u.logical!r}")
         seen[u.logical] = u.label
     return out
+
+
+def superdataset(plan: Plan) -> Unit:
+    return Unit(SUPERDATASET, plan.superdataset)
+
+
+def registered(plan: Plan) -> list[Unit]:
+    """Units registered in the superdataset: datasets with a path other than the root."""
+    return [Unit(logical_path(d), d) for d in plan.provenance_order()
+            if d.path and not d.is_superdataset]
 
 
 def source_links(plan: Plan, dataset: Dataset) -> list[tuple[str, Unit]]:

@@ -21,13 +21,7 @@
       "sample_entities": [
         "subject",
         "session"
-      ],
-      "superdataset": {
-        "template": {
-          "repository": "https://github.com/example-lab/faire-template-superdataset",
-          "version": "v0.1.0"
-        }
-      }
+      ]
     },
     "dataset": [
       {
@@ -281,6 +275,33 @@
             "faire": {
               "stage": "release",
               "wanted": "not metadata=distribution-restrictions=*"
+            }
+          }
+        ]
+      },
+      {
+        "title": "Study X superdataset",
+        "dataset_id": {
+          "identifier": "studyx",
+          "type": "other"
+        },
+        "personal_data": "no",
+        "sensitive_data": "no",
+        "faire": {
+          "template": {
+            "repository": "https://github.com/example-lab/faire-template-superdataset",
+            "version": "v0.1.0"
+          },
+          "path": "."
+        },
+        "distribution": [
+          {
+            "title": "Public release",
+            "data_access": "open",
+            "access_url": "ria+ssh://data.example.org/project/studyx/release",
+            "faire": {
+              "stage": "release",
+              "wanted": "anything"
             }
           }
         ]

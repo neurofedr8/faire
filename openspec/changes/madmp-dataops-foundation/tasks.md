@@ -51,7 +51,7 @@
 
 ## 8. Rework: superdataset as a dataset, `base` branch, single CI entry
 
-- [ ] 8.1 Profile and init: superdataset is the dataset with path `.` (schema, validation, example, `docs/profile.md`), rendered and registered like any dataset; drop `dmp.faire.superdataset`; verify the superdataset-profile and init scenarios
+- [x] 8.1 Profile and init: superdataset is the dataset with path `.` (schema, validation, example, `docs/profile.md`), rendered and registered like any dataset; drop `dmp.faire.superdataset`; verify the superdataset-profile and init scenarios
 - [ ] 8.2 Streams on `dev` only, pilot items marked by a `faire-pilot` trailer; per-sample fingerprints looking inside source subdatasets; verify pilot-marking, source-moved and other-samples-arrived scenarios
 - [ ] 8.3 `base` as default branch created by init, and the `update` task (pointers on `base`, merge into `dev`, `pilot` and open branches, open sessions from `base`, recompute on concurrent update); remove `faire sessions`; verify new-session, late-stream, rule-fixed, session-diff and pilot-isolation scenarios with the fake platform
 - [ ] 8.4 `faire plan` deciding from the branch, loop guard in plan, `status` starting the next wave, checks only when nothing is due, native downstream triggers; remove `faire trigger`, `faire replan` and `FAIRE_DOWNSTREAM`; ship a fixed CI configuration in the reference templates; update golden files and `docs/rules.md`, `docs/gitlab.md`; verify render, nothing-due, loop and next-wave scenarios

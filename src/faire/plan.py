@@ -13,6 +13,7 @@ from typing import Any
 
 DERIVED_FROM = "IsDerivedFrom"
 STAGES = ("collection", "accepted", "release")
+ROOT = "."  # path of the study superdataset
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,10 @@ class Dataset:
         return bool(self.instruments)
 
     @property
+    def is_superdataset(self) -> bool:
+        return self.path == ROOT
+
+    @property
     def instances(self) -> tuple[str, ...]:
         return tuple(i.instance for i in self.instruments)
 
@@ -71,7 +76,6 @@ class Dataset:
 @dataclass(frozen=True)
 class Plan:
     sample_entities: tuple[str, ...]
-    superdataset_template: Template
     datasets: dict[str, Dataset]
 
     @classmethod
@@ -105,9 +109,12 @@ class Plan:
             datasets[ds.id] = ds
         return cls(
             sample_entities=tuple(ext["sample_entities"]),
-            superdataset_template=Template.from_json(ext["superdataset"]["template"]),
             datasets=datasets,
         )
+
+    @property
+    def superdataset(self) -> Dataset | None:
+        return next((d for d in self.datasets.values() if d.is_superdataset), None)
 
     def provenance_order(self) -> list[Dataset]:
         """Datasets ordered so that every source comes before the datasets derived from it."""

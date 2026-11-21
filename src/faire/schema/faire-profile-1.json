@@ -65,7 +65,7 @@
     },
     "DmpExtension": {
       "type": "object",
-      "required": ["sample_entities", "superdataset"],
+      "required": ["sample_entities"],
       "additionalProperties": false,
       "properties": {
         "sample_entities": {
@@ -74,12 +74,6 @@
           "uniqueItems": true,
           "items": {"$ref": "#/$defs/Name"},
           "description": "Ordered entity names identifying a sample"
-        },
-        "superdataset": {
-          "type": "object",
-          "required": ["template"],
-          "additionalProperties": false,
-          "properties": {"template": {"$ref": "#/$defs/Template"}}
         }
       }
     },
@@ -91,7 +85,7 @@
         "template": {"$ref": "#/$defs/Template"},
         "path": {
           "type": "string",
-          "description": "Relative path in the study superdataset; absent: not registered"
+          "description": "Relative path in the study superdataset; '.' is the superdataset itself; absent: not registered"
         }
       }
     },

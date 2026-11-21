@@ -132,10 +132,9 @@ class Env:
             "dmp_id": {"identifier": "https://example.org/dmp", "type": "url"},
             "contact": {"name": "x", "mbox": "x@example.org",
                         "contact_id": {"identifier": "x", "type": "other"}},
-            "faire": {"sample_entities": ["subject", "session"],
-                      "superdataset": {"template": {"repository": self.super_tpl,
-                                                    "version": "v0.1.0"}}},
+            "faire": {"sample_entities": ["subject", "session"]},
             "dataset": [
+                self.dataset("study", "Study", self.super_tpl, path="."),
                 self.dataset("dicoms", "scanner", self.stream_tpl,
                              instruments=["PrismaFit16001"],
                              distributions=[self.dist("Site storage", "collection", ria)]),
@@ -235,8 +234,8 @@ def reference_doc(env: Env, ref: Reference) -> dict:
     """Two streams feeding one standard dataset, all from the reference templates."""
     ria = f"ria+file://{env.root / 'ria'}"
     doc = env.doc()
-    doc["dmp"]["faire"]["superdataset"]["template"]["repository"] = ref.superdataset
     doc["dmp"]["dataset"] = [
+        env.dataset("study", "Study", ref.superdataset, path="."),
         env.dataset("dicoms", "scanner", ref.stream, instruments=["PrismaFit16001"],
                     distributions=[env.dist("Site storage", "collection", ria)]),
         env.dataset("physio", "physio", ref.stream, instruments=["Biopac01"],

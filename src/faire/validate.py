@@ -12,7 +12,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 from jsonschema import Draft202012Validator
 
-from faire.plan import DERIVED_FROM
+from faire.plan import DERIVED_FROM, ROOT
 
 SECRET_QUERY_KEYS = re.compile(r"(token|password|passwd|secret|api[_-]?key|access[_-]?key)", re.I)
 
@@ -50,6 +50,7 @@ def validate(doc: Any) -> list[Violation]:
     datasets = doc["dmp"]["dataset"]
     violations += _identity(datasets)
     violations += _paths(datasets)
+    violations += _superdataset(datasets)
     violations += _sources(datasets)
     violations += _instruments(datasets)
     violations += _urls(datasets)
@@ -76,7 +77,7 @@ def _paths(datasets: list[dict]) -> list[Violation]:
     owners: dict[tuple[str, ...], str] = {}
     for i, d in enumerate(datasets):
         path = d["faire"].get("path")
-        if path is None:
+        if path is None or path == ROOT:
             continue
         where = _where(i, d)
         if any("faire" in t for t in d.get("technical_resource", [])):
@@ -96,6 +97,21 @@ def _paths(datasets: list[dict]) -> list[Violation]:
                     Violation(where, f"path {path!r} equals or nests with the path of {owner!r}")
                 )
         owners[parts] = d["dataset_id"]["identifier"]
+    return out
+
+
+def _superdataset(datasets: list[dict]) -> list[Violation]:
+    roots = [(i, d) for i, d in enumerate(datasets) if d["faire"].get("path") == ROOT]
+    out = [Violation(_where(i, d), f"another dataset already declares path {ROOT!r}")
+           for i, d in roots[1:]]
+    for i, d in roots:
+        if any(link["relation_type"] == DERIVED_FROM for link in d.get("related_identifier", [])):
+            out.append(Violation(_where(i, d), "the superdataset must not have sources"))
+        if any("faire" in t for t in d.get("technical_resource", [])):
+            out.append(Violation(_where(i, d), "the superdataset must not declare instruments"))
+    if not roots and any(d["faire"].get("path") for d in datasets):
+        out.append(Violation("dmp.dataset",
+                             f"datasets declare paths but none declares {ROOT!r} (superdataset)"))
     return out
 
 

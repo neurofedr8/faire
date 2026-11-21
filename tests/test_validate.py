@@ -59,9 +59,26 @@ def test_unpinned_template(doc):
     assert any("'version' is a required property" in m for m in messages(doc))
 
 
-def test_superdataset_template_required(doc):
-    del doc["dmp"]["faire"]["superdataset"]
-    assert any("'superdataset' is a required property" in m for m in messages(doc))
+def test_superdataset_with_release(doc):
+    plan = Plan.from_document(doc)
+    assert plan.superdataset.id == "studyx"
+    assert [d.stage for d in plan.superdataset.distributions] == ["release"]
+
+
+def test_paths_without_superdataset(doc):
+    doc["dmp"]["dataset"].remove(ds(doc, "studyx"))
+    assert any("none declares '.'" in m for m in messages(doc))
+
+
+def test_two_superdatasets(doc):
+    ds(doc, "fmriprep")["faire"]["path"] = "."
+    assert any("already declares path '.'" in m for m in messages(doc))
+
+
+def test_superdataset_without_sources(doc):
+    ds(doc, "studyx")["related_identifier"] = [
+        {"identifier": "bids", "type": "other", "relation_type": "IsDerivedFrom"}]
+    assert any("must not have sources" in m for m in messages(doc))
 
 
 def test_derivative_path_valid(doc):

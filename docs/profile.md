@@ -17,7 +17,6 @@ Full example: [`examples/madmp/single_site.json`](../examples/madmp/single_site.
 | Key | Required | Meaning |
 |---|---|---|
 | `sample_entities` | yes | Ordered entity names identifying a sample, e.g. `["subject", "session"]` |
-| `superdataset.template` | yes | Copier template of the study superdataset (see Template) |
 
 ## `dataset`
 
@@ -35,7 +34,14 @@ Standard fields faire reads:
 | Key | Required | Meaning |
 |---|---|---|
 | `template` | yes | Copier template of the dataset |
-| `path` | no | Relative path in the study superdataset, e.g. `derivatives/fmriprep`. No segment may contain `.`, and no path may equal or contain another. Without a path the dataset is not registered in the superdataset. |
+| `path` | no | Relative path in the study superdataset, e.g. `derivatives/fmriprep`. No segment may contain `.`, and no path may equal or contain another. Without a path the dataset is not registered in the superdataset. Path `.` makes the dataset the study superdataset (see below). |
+
+### The study superdataset
+
+The superdataset is the dataset declaring `path: "."`: at most one, without sources or instruments,
+required as soon as another dataset declares a path. It has a template and distributions like any
+dataset, so it may also hold annexed files; a RIA `access_url` hosts both its history and its
+content. faire registers every dataset with a path in it and tracks the ma-DMP there.
 
 ### Template
 
