@@ -3,7 +3,8 @@
 The heuristic is a Python module, ``.faire/heuristic.py`` in the stream (loaded from its first
 declared instance, all instances being rendered from the same template). Each top-level entry
 of the received directory is one item; the heuristic says which instrument produced it, its
-sample entities, where it goes in the instance and whether it is a pilot.
+sample entities, where it goes in the instance and whether it is a pilot. Streams have a single
+``dev`` branch; a pilot item is committed there with a ``faire-pilot`` trailer.
 """
 
 from __future__ import annotations
@@ -24,6 +25,8 @@ from faire.plan import sample_label
 from faire.project import Project
 
 HEURISTIC = ".faire/heuristic.py"
+BRANCH = "dev"
+TRAILER_PILOT = "faire-pilot"
 VALUE = re.compile(r"^[A-Za-z0-9-]+$")
 
 
@@ -38,10 +41,6 @@ class Item:
     entities: dict[str, str]
     place: str
     pilot: bool
-
-    @property
-    def branch(self) -> str:
-        return "pilot" if self.pilot else "dev"
 
 
 def load_heuristic(ds: Dataset) -> ModuleType:
@@ -106,7 +105,7 @@ class Indexer:
     def describe(self, item: Item) -> str:
         label = sample_label(item.entities, self.project.plan.sample_entities)
         return (f"{item.source.name}: {self.stream.id}/{item.instance} {label} -> "
-                f"{item.place} on {item.branch}")
+                f"{item.place}{' (pilot)' if item.pilot else ''}")
 
     def index(self, directory: Path, dry_run: bool = False) -> list[str]:
         """Index every item; return one line per item and per commit."""
@@ -114,12 +113,12 @@ class Indexer:
         lines = [self.describe(i) for i in items]
         if dry_run:
             return lines
-        groups: dict[tuple[str, str], list[Item]] = {}
+        groups: dict[str, list[Item]] = {}
         for item in items:
-            groups.setdefault((item.instance, item.branch), []).append(item)
-        for (instance, branch), group in groups.items():
+            groups.setdefault(item.instance, []).append(item)
+        for instance, group in groups.items():
             unit = next(u for u in self.units.values() if u.instrument.instance == instance)
-            lines += self._commit(unit, branch, group)
+            lines += self._commit(unit, BRANCH, group)
         return lines
 
     def _commit(self, unit: Unit, branch: str, items: list[Item]) -> list[str]:
@@ -141,12 +140,14 @@ class Indexer:
                 if _copy(item.source, dest):
                     label = sample_label(item.entities, order)
                     entities = ",".join(f"{k}={item.entities[k]}" for k in order)
+                    pilot = f"\n{TRAILER_PILOT}: true" if item.pilot else ""
                     ds.save(path=item.place,
                             message=(f"faire index: {label}\n\n"
                                      f"faire-entities: {entities}\n"
-                                     f"faire-heuristic: {heuristic_rev}"),
+                                     f"faire-heuristic: {heuristic_rev}{pilot}"),
                             result_renderer="disabled")
-                    lines.append(f"committed {label} to {unit.label} {branch}")
+                    lines.append(f"committed {label}{' (pilot)' if item.pilot else ''} "
+                                 f"to {unit.label}")
             if repo.get_hexsha() != before:
                 self._publish(unit, ds, branch, before)
             return lines

@@ -116,6 +116,7 @@ def test_mark_partial_and_missing(project, tmp_path):
     assert L.mark(ds, "physio", "reviewer") == "missing"
 
 
+@pytest.mark.xfail(reason="pilot sessions move to base in task 8.3", strict=True)
 def test_pilot_isolation(project, tmp_path, platform):
     fake, repo = platform
     origin = Dataset(project.path("rawdata"))

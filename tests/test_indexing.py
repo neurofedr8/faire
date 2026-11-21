@@ -42,7 +42,7 @@ def head(project, branch="dev") -> str:
 def test_new_session(project, tmp_path):
     src = received(tmp_path / "in", ("sub-01_ses-a", "PrismaFit16001"))
     lines = Indexer(project, "dicoms").index(src)
-    assert "committed subject-01_session-a to dicoms/a_PrismaFit16001 dev" in lines
+    assert "committed subject-01_session-a to dicoms/a_PrismaFit16001" in lines
     ds = Dataset(project.path(INSTANCE))
     assert (Path(ds.path) / "sub-01" / "ses-a" / "scan.dat").read_bytes() == b"data of sub-01_ses-a"
     message = ds.repo.call_git(["log", "-1", "--format=%B", "dev"])
@@ -75,15 +75,14 @@ def test_unknown_instrument(project, tmp_path):
     assert sorted(p.name for p in src.iterdir()) == ["sub-03_ses-a", "sub-03_ses-b"]
 
 
-def test_pilot_routing(project, tmp_path):
+def test_pilot_marking(project, tmp_path):
     src = received(tmp_path / "in", ("sub-04_ses-a_pilot", "PrismaFit16001"))
-    before_dev = head(project)
     lines = Indexer(project, "dicoms").index(src)
-    assert "committed subject-04_session-a to dicoms/a_PrismaFit16001 pilot" in lines
-    assert head(project) == before_dev
+    assert "committed subject-04_session-a (pilot) to dicoms/a_PrismaFit16001" in lines
     ds = Dataset(project.path(INSTANCE))
-    files = ds.repo.call_git(["ls-tree", "-r", "--name-only", "pilot"])
-    assert "sub-04/ses-a/scan.dat" in files
+    assert "sub-04/ses-a/scan.dat" in ds.repo.call_git(["ls-tree", "-r", "--name-only", "dev"])
+    assert "faire-pilot: true" in ds.repo.call_git(["log", "-1", "--format=%B", "dev"])
+    assert "pilot" not in ds.repo.get_branches()
 
 
 def test_dry_run(project, tmp_path):
@@ -93,7 +92,7 @@ def test_dry_run(project, tmp_path):
         "index", "dicoms", str(src), "--dmp", str(project.dmp_file),
         "--workdir", str(project.workdir), "--dry-run"])
     assert result.exit_code == 0, result.output
-    assert ("sub-05_ses-a: dicoms/a_PrismaFit16001 subject-05_session-a -> sub-05/ses-a on dev"
+    assert ("sub-05_ses-a: dicoms/a_PrismaFit16001 subject-05_session-a -> sub-05/ses-a"
             in result.output)
     assert head(project) == before
 

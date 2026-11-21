@@ -32,6 +32,7 @@ DOWNSTREAM_VARIABLE = "FAIRE_DOWNSTREAM"
 DMP_FILE = "dmp.json"
 EARLY_STAGES = ("collection", "accepted")
 DATASET_BRANCHES = ("dev", "pilot")
+STREAM_BRANCHES = ("dev",)
 SUPERDATASET_BRANCHES = ("dev", "main")
 PROTECTED = ("dev", "pilot", "convert/*")
 SUPERDATASET_PROTECTED = ("dev", "main", "rel/*")
@@ -198,7 +199,8 @@ class Project:
             self._populate_superdataset(ds)
         for spec in self._remote_specs(unit):
             remotes.create(ds, spec)
-        branches = SUPERDATASET_BRANCHES if unit.is_superdataset else DATASET_BRANCHES
+        branches = (SUPERDATASET_BRANCHES if unit.is_superdataset
+                    else STREAM_BRANCHES if unit.instrument else DATASET_BRANCHES)
         for branch in branches[1:]:
             ds.repo.call_git(["branch", branch, "dev"])
         if self.platform:
@@ -255,7 +257,8 @@ class Project:
             ds.repo.call_git(["remote", "add", "origin", repo.url])
         with platform.git_auth():
             ds.repo.call_git(["push", "origin", *branches, "git-annex"])
-        for pattern in SUPERDATASET_PROTECTED if unit.is_superdataset else PROTECTED:
+        for pattern in (SUPERDATASET_PROTECTED if unit.is_superdataset
+                        else STREAM_BRANCHES if unit.instrument else PROTECTED):
             platform.protect_branch(repo, pattern)
         platform.set_merge_policy(repo, APPROVALS)
         if not unit.is_superdataset:

@@ -103,6 +103,12 @@ def test_source_moved(project, tmp_path):
     ds = session(project, tmp_path, "02")
     T.run_all(ds)
     assert T.plan(ds) == []
+    # other samples arriving move the pointers but leave this session's inputs alone
+    index(project, tmp_path / "other", "92")
+    assert bump_source(ds, "sourcedata/dicoms/a_PrismaFit16001")
+    assert bump_source(ds, "sourcedata/physio/a_Biopac01")
+    ds.save(message="bump", result_renderer="disabled")
+    assert T.plan(ds) == []
     Indexer(project, "physio").index(received(tmp_path / "late", "sub-02_ses-a", "Biopac01",
                                               {"rec2.log": b"more"}))
     assert bump_source(ds, "sourcedata/physio/a_Biopac01")

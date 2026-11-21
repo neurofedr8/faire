@@ -164,14 +164,46 @@ def ensure_subdatasets(ds: Dataset, patterns: list[str], commit: str = "HEAD") -
 
 
 def fingerprint(ds: Dataset, patterns: list[str], commit: str) -> dict[str, str]:
+    """Blob ids of the files the patterns match at ``commit``, inside subdatasets too (at
+    their recorded commits), so moving a source pointer for other samples changes nothing."""
     out = {}
     for path, (kind, oid) in tree(ds, commit).items():
-        for p in patterns:
-            if (kind == "commit" and inside(p, path) is not None) or (
-                    kind != "commit" and match(p, path)):
+        if kind != "commit":
+            if any(match(p, path) for p in patterns):
                 out[path] = oid
-                break
+            continue
+        rests = [r for r in (inside(p, path) for p in patterns) if r is not None]
+        if not rests:
+            continue
+        files = _subtree(Dataset(Path(ds.path) / path), oid)
+        if files is None:
+            out[path] = oid  # not installed or commit unknown: fall back to the pointer
+            continue
+        for sub_path, (_, sub_oid) in files.items():
+            if any(match(r, sub_path) for r in rests):
+                out[f"{path}/{sub_path}"] = sub_oid
     return out
+
+
+def _subtree(sub: Dataset, commit: str) -> dict[str, tuple[str, str]] | None:
+    if not (Path(sub.path) / ".git").exists():
+        return None
+    try:
+        return tree(sub, commit)
+    except CommandError:
+        try:
+            sub.repo.call_git(["fetch", "-q", "origin"])
+            return tree(sub, commit)
+        except CommandError:
+            return None
+
+
+def owner(entries: dict[str, tuple[str, str]], path: str) -> str:
+    """``path`` itself, or the subdataset holding it."""
+    for p, (kind, _) in entries.items():
+        if kind == "commit" and path.startswith(p + "/"):
+            return p
+    return path
 
 
 def present(ds: Dataset, patterns: list[str], commit: str = "HEAD") -> bool:
@@ -209,8 +241,9 @@ def rule_state(ds: Dataset, rules: dict[str, Rule], rule: Rule, label: str, bran
     differing = sorted(k for k in set(now) | set(then) if now.get(k) != then.get(k))
     after = later(rules, rule.name)
     changed = []
+    entries = tree(ds, head)
     for path in differing:
-        touching = log(ds, f"{record}..{head}", path)
+        touching = log(ds, f"{record}..{head}", owner(entries, path))
         by_later = touching and all(t.get(TRAILER_RULE, [None])[0] in after for _, t in touching)
         if not by_later:
             changed.append(path)
