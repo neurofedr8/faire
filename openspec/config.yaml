@@ -5,7 +5,8 @@ context: |
   All git, git-annex and DataLad operations go through the DataLad Python API (datalad.api, ds.repo),
   never subprocess. Platform access only through the platform adapter (python-gitlab for GitLab).
   Dependencies stay minimal: search for a well-maintained package and ask before adding one.
-  Rules, checks and site configs are YAML. Tests: pytest; lint: ruff. The tool's own CI is GitHub Actions.
+  Rules and checks are datalad-container entries with `faire-*` keys in each dataset's
+  `.datalad/config`; site configs are YAML. Tests: pytest; lint: ruff. The tool's own CI is GitHub Actions.
   Domain-agnostic: neuroimaging is only an inspiration, not a requirement of the code.
 
 # Project context (optional)
