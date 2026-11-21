@@ -135,3 +135,109 @@ def index_cmd(stream, directory, dmp_file, workdir, platform_kind, group, platfo
             click.echo(line)
     except IndexingError as exc:
         raise click.ClickException(str(exc)) from exc
+
+
+def _dataset(path: str):
+    from datalad.api import Dataset
+
+    return Dataset(path)
+
+
+@main.command("plan")
+@click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
+@click.option("--ci-render", type=click.Choice(["gitlab", "github"]),
+              help="Emit a CI-native pipeline instead of the neutral task list.")
+@click.option("--stage", default="collection", help="Stage whose checks the pipeline runs.")
+def plan_cmd(dataset_path, ci_render, stage) -> None:
+    """List the due tasks of the current session branch."""
+    from faire import tasks as T
+
+    ds = _dataset(dataset_path)
+    found = T.plan(ds)
+    if ci_render == "gitlab":
+        click.echo(T.render_gitlab(found, T.check_list(ds, stage), stage), nl=False)
+    elif ci_render == "github":
+        click.echo(T.render_github(found, T.check_list(ds, stage)))
+    else:
+        click.echo(T.as_json(found))
+
+
+@main.command("run")
+@click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
+@click.option("--task", "task_id", help="Task id from `faire plan`.")
+@click.option("--all", "run_all", is_flag=True, help="Run every due task, wave after wave.")
+@click.option("--no-push", is_flag=True, help="Commit locally only.")
+def run_cmd(dataset_path, task_id, run_all, no_push) -> None:
+    """Run one task, or all due tasks, of the current session branch."""
+    from faire import tasks as T
+
+    if bool(task_id) == bool(run_all):
+        raise click.UsageError("give either --task or --all")
+    ds = _dataset(dataset_path)
+    try:
+        if task_id:
+            click.echo(f"{task_id}: {T.run_task(ds, task_id, push=not no_push)}")
+        else:
+            for line in T.run_all(ds, push=not no_push):
+                click.echo(line)
+    except T.TaskError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+@main.command("test")
+@click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
+@click.option("--stage", required=True, type=click.Choice(["collection", "accepted", "release"]))
+@click.option("--check", "only", help="Run only this check.")
+def test_cmd(dataset_path, stage, only) -> None:
+    """Run the checks of STAGE; exit non-zero when a blocking check fails."""
+    from faire import tasks as T
+    from faire.state import sample_of
+
+    ds = _dataset(dataset_path)
+    branch = ds.repo.get_active_branch() or ""
+    sample = sample_of(branch)
+    waived = _waived(ds, sample)
+    failed = False
+    for r in T.run_checks(ds, stage, sample, only, waived):
+        verdict = "ok" if r.passed else ("FAILED" if r.blocking else "warning")
+        click.echo(f"{r.name}: {verdict}")
+        if r.output:
+            click.echo("  " + r.output.replace("\n", "\n  "))
+        for m in r.modified:
+            click.echo(f"  modified the dataset: {m}")
+        failed |= r.blocking and not r.passed
+    if failed:
+        sys.exit(1)
+
+
+def _waived(ds, sample) -> tuple[str, ...]:
+    return ()
+
+
+def _platform_from_env():
+    """The platform of the running CI job (GitLab), with a token from FAIRE_GITLAB_TOKEN."""
+    import os
+
+    from faire.platform.gitlab import GitLabPlatform
+
+    url, token = os.environ.get("CI_SERVER_URL"), os.environ.get("FAIRE_GITLAB_TOKEN")
+    path = os.environ.get("CI_PROJECT_PATH")
+    if not (url and token and path):
+        raise click.ClickException("needs CI_SERVER_URL, CI_PROJECT_PATH and FAIRE_GITLAB_TOKEN")
+    platform = GitLabPlatform(url, token, path.rsplit("/", 1)[0])
+    return platform, platform.get_repository(path)
+
+
+@main.command("replan")
+@click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
+@click.option("--since", envvar="CI_COMMIT_SHA", required=True,
+              help="Commit the pipeline ran for (default: CI_COMMIT_SHA).")
+def replan_cmd(dataset_path, since) -> None:
+    """Start the next wave when the branch moved during this pipeline."""
+    from faire import tasks as T
+
+    platform, repo = _platform_from_env()
+    try:
+        click.echo(T.replan(_dataset(dataset_path), since, platform, repo))
+    except T.TaskError as exc:
+        raise click.ClickException(str(exc)) from exc

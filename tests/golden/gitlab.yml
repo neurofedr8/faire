@@ -1,0 +1,53 @@
+stages:
+- tasks
+- status
+- checks
+- replan
+task-unwarp-s:
+  stage: tasks
+  script:
+  - faire run --task 'unwarp:s'
+  needs: []
+task-physio-s:
+  stage: tasks
+  script:
+  - faire run --task 'physio:s'
+  needs: []
+task-deface-s:
+  stage: tasks
+  script:
+  - faire run --task 'deface:s'
+  needs:
+  - task-unwarp-s
+  tags:
+  - gpu
+status:
+  stage: status
+  script:
+  - faire status
+  needs:
+  - task-unwarp-s
+  - task-physio-s
+  - task-deface-s
+check-validate:
+  stage: checks
+  script:
+  - faire test --stage collection --check 'validate'
+  needs:
+  - status
+  allow_failure: false
+check-summary:
+  stage: checks
+  script:
+  - faire test --stage collection --check 'summary'
+  needs:
+  - status
+  allow_failure: true
+replan:
+  stage: replan
+  script:
+  - faire replan
+  needs:
+  - status
+  - check-validate
+  - check-summary

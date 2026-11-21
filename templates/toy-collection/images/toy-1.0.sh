@@ -7,7 +7,8 @@
 set -e
 op=$1; shift
 case "$op" in
-  copy) dest=$1; shift; mkdir -p "$dest"; for f in "$@"; do cp -L "$f" "$dest/"; done ;;
+  copy) dest=$1; shift; mkdir -p "$dest"
+        for f in "$@"; do cat "$f" > "$dest/$(basename "$f")"; done ;;
   mark) for f in "$@"; do echo "marked" >> "$f"; done ;;
   check) if find "$1" -name '*bad*' -not -path '*/.git/*' | grep -q .; then
            echo "invalid file names" >&2; exit 1; fi ;;

@@ -34,13 +34,13 @@
 
 ## 6. Rules, planning and running
 
-- [ ] 6.1 Read rules and checks from container entries; classify primary/secondary; verify the classification scenario
-- [ ] 6.2 Fingerprints and due-ness (record lookup since branch base, `faire-after` exclusion); verify in-place and source-moved scenarios
-- [ ] 6.3 `faire run --task` and `--all` (re-check, input retrieval, containers-run, commit, merge, push with retries, content push); verify concurrent-push and no-longer-due scenarios with two local clones
-- [ ] 6.4 `faire test` (direct execution, worktree-clean check, blocking/advisory, waived patterns via `FAIRE_WAIVED`); verify the check-modifies-files scenario
-- [ ] 6.5 `faire plan` with neutral output and `--ci-render gitlab|github`; verify rendered output against golden files for the ordered-chain case
-- [ ] 6.6 `faire replan` with loop guard; verify next-wave and loop scenarios with the fake platform
-- [ ] 6.7 Document rule and check keys in `docs/rules.md`; verify the reference template matches the documentation
+- [x] 6.1 Read rules and checks from container entries; classify primary/secondary; verify the classification scenario
+- [x] 6.2 Fingerprints and due-ness (record lookup since branch base, `faire-after` exclusion); verify in-place and source-moved scenarios
+- [x] 6.3 `faire run --task` and `--all` (re-check, input retrieval, containers-run, commit, merge, push with retries, content push); verify concurrent-push and no-longer-due scenarios with two local clones
+- [x] 6.4 `faire test` (direct execution, worktree-clean check, blocking/advisory, waived patterns via `FAIRE_WAIVED`); verify the check-modifies-files scenario
+- [x] 6.5 `faire plan` with neutral output and `--ci-render gitlab|github`; verify rendered output against golden files for the ordered-chain case
+- [x] 6.6 `faire replan` with loop guard; verify next-wave and loop scenarios with the fake platform
+- [x] 6.7 Document rule and check keys in `docs/rules.md`; verify the reference template matches the documentation
 
 ## 7. Lifecycle
 

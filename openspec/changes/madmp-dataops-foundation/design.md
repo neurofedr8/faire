@@ -101,8 +101,13 @@ None: nothing deployed. The `write` branch is not migrated; reusable parts are t
 
 ## Open Questions
 
-- Exact placeholder syntax for `faire-input`/`faire-output`/`faire-cmd` beyond `{entity}` substitution.
 
-Resolved by spikes (datalad 1.8.0, datalad-container 1.2.6, git-annex 10.20261026):
+Resolved during implementation (datalad 1.8.0, datalad-container 1.2.6, git-annex 10.20261026):
 - datalad-container keeps unknown `faire-*` keys in `containers-list` results; multi-valued keys come back as tuples.
 - `create_sibling_ria` with `ria+file://` creates, pushes and clones by dataset id; `create_sibling` with a local path or `ssh://` URL creates a plain sibling. `create_sibling` rejects `file://` URLs, so faire converts them to paths. `datalad-annex::` URLs need the datalad-next extension, not yet a dependency.
+- Placeholders: `{entity}` in `faire-input`, `faire-output`, `faire-cmd`; globs with `*` within a segment and `**` across segments; DataLad's `{inputs}`/`{outputs}` left to `containers-run`.
+- A run commit carries `faire-rule` and `faire-sample` trailers in its message (besides DataLad's run record); planning finds records by them.
+- Session branches are `convert/<sample>` from `dev` and `convert-pilot/<sample>` from `pilot` (git forbids `pilot/…` next to a `pilot` branch). Sample labels are `name-value` pairs joined by `_`.
+- Tasks push content only to remotes named `collection-*` (remote names are `<stage>-<title>`). Pushes use `--no-verify`, since git-annex refuses pushes from clones with unverified special remotes.
+- A collection subdataset installed through an intermediate clone may not know where images are; faire then adds the collection URL from `.gitmodules` as a remote before retrieving the image.
+- A global `annex.private=true` (git-annex) hides location information from every clone and breaks content retrieval between faire's repositories.

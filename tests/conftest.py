@@ -5,12 +5,21 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 from datalad.api import Dataset, create
 from datalad.support.gitrepo import GitRepo
+
+# Tests must not depend on the developer's git configuration (e.g. annex.private=true hides
+# location information from clones); give them a global configuration of their own.
+_GITCONFIG = Path(tempfile.mkdtemp(prefix="faire-tests-")) / "gitconfig"
+_GITCONFIG.write_text("[user]\n\tname = faire tests\n\temail = tests@example.org\n"
+                      "[init]\n\tdefaultBranch = main\n")
+os.environ["GIT_CONFIG_GLOBAL"] = str(_GITCONFIG)
 
 ANSWERS = "{{ _copier_answers|to_nice_yaml }}"
 GITATTRIBUTES = "* annex.largefiles=(not(mimetype=text/*))\n"

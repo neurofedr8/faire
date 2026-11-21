@@ -1,0 +1,36 @@
+{
+ "levels": [
+  {
+   "include": [
+    {
+     "task": "unwarp:s",
+     "runner": "ubuntu-latest"
+    },
+    {
+     "task": "physio:s",
+     "runner": "ubuntu-latest"
+    }
+   ]
+  },
+  {
+   "include": [
+    {
+     "task": "deface:s",
+     "runner": "gpu"
+    }
+   ]
+  }
+ ],
+ "checks": {
+  "include": [
+   {
+    "check": "validate",
+    "blocking": true
+   },
+   {
+    "check": "summary",
+    "blocking": false
+   }
+  ]
+ }
+}

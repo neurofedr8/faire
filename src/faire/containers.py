@@ -86,3 +86,27 @@ def collection_of(image: str, cols: list[Collection]) -> str:
         if image.startswith(col.path.rstrip("/") + "/"):
             return col.name
     return "(no collection)"
+
+
+def get_image(ds: Dataset, name: str) -> str:
+    """Retrieve the image of container ``name``; return its path.
+
+    A collection subdataset installed through an intermediate clone may not know where its
+    content is; then the collection's own URL (from `.gitmodules`) is added as a remote.
+    """
+    image = entries(ds)[name]["image"]
+    try:
+        ds.get(image, result_renderer="disabled")
+        return image
+    except Exception:
+        pass
+    for col in collections(ds):
+        if image.startswith(col.path.rstrip("/") + "/"):
+            sub = Dataset(Path(ds.path) / col.path)
+            if "faire-collection" not in sub.repo.get_remotes():
+                sub.repo.call_git(["remote", "add", "faire-collection", col.url])
+            sub.repo.call_git(["fetch", "-q", "faire-collection"])
+            sub.repo.call_annex(["merge"])
+            break
+    ds.get(image, result_renderer="disabled")
+    return image
