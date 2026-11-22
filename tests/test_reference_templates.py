@@ -67,6 +67,9 @@ def test_ci_configuration_matches_rendered_jobs():
     from conftest import REFERENCE
     from faire.tasks import BEFORE_SCRIPT
 
-    for name in ("standard", "stream", "superdataset"):
-        config = yaml.safe_load((REFERENCE / name / ".gitlab-ci.yml").read_text())
-        assert config["faire-plan"]["before_script"] == BEFORE_SCRIPT, name
+    found = sorted(REFERENCE.glob("*/.gitlab-ci.yml"))
+    names = {p.parent.name for p in found}
+    assert {"base", "standard", "derivative", "toy-standard", "stream", "superdataset"} <= names
+    for path in found:
+        config = yaml.safe_load(path.read_text())
+        assert config["faire-plan"]["before_script"] == BEFORE_SCRIPT, path.parent.name

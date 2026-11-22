@@ -1,40 +1,35 @@
-[faire "collection.toy"]
+[faire "collection.tools"]
 	url = {{ collection_url }}
 	path = code/containers
-	revision = v1
+	revision = {{ collection_revision }}
+# Primary rule: one sample of the stream to this dataset. Adapt the sample entities in the
+# patterns ({subject}, {session}, ...) to those of the plan.
 [datalad "containers.convert"]
-	image = code/containers/images/toy-1.0.sh
-	cmdexec = sh {img} {cmd}
-	faire-sourcedata = {{ primary_stream }}
-	faire-input = sourcedata/{{ primary_stream }}/*/sub-{subject}/ses-{session}/*.dat
-	faire-output = sub-{subject}/ses-{session}/anat
-	faire-cmd = copy sub-{subject}/ses-{session}/anat {inputs}
-[datalad "containers.merge-physio"]
-	image = code/containers/images/toy-1.0.sh
-	cmdexec = sh {img} {cmd}
+	image = code/containers/images/TODO
+	cmdexec = {img} {cmd}
+	faire-sourcedata = {{ source }}
+	faire-input = sourcedata/{{ source }}/*/sub-{subject}/ses-{session}/*
+	faire-output = sub-{subject}/ses-{session}
+	faire-cmd = TODO {inputs} {outputs}
+# Secondary rule: reads what `convert` wrote (`.` is the dataset itself) and runs after it.
+[datalad "containers.process"]
+	image = code/containers/images/TODO
+	cmdexec = {img} {cmd}
 	faire-sourcedata = .
-	faire-sourcedata = {{ secondary_stream }}
-	faire-input = sub-{subject}/ses-{session}/anat/*.dat
-	faire-input = sourcedata/{{ secondary_stream }}/*/sub-{subject}/ses-{session}/*.log
-	faire-output = sub-{subject}/ses-{session}/func
-	faire-cmd = copy sub-{subject}/ses-{session}/func sourcedata/{{ secondary_stream }}/*/sub-{subject}/ses-{session}/*.log
-[datalad "containers.deface"]
-	image = code/containers/images/toy-1.0.sh
-	cmdexec = sh {img} {cmd}
-	faire-sourcedata = .
-	faire-input = sub-{subject}/ses-{session}/anat/*.dat
-	faire-output = sub-{subject}/ses-{session}/anat/*.dat
-	faire-cmd = mark {outputs}
+	faire-input = sub-{subject}/ses-{session}/*
+	faire-output = sub-{subject}/ses-{session}/*
+	faire-after = convert
+	faire-cmd = TODO {outputs}
 [datalad "containers.validate"]
-	image = code/containers/images/toy-1.0.sh
-	cmdexec = sh {img} {cmd}
+	image = code/containers/images/TODO
+	cmdexec = {img} {cmd}
 	faire-check = blocking
 	faire-stage = collection
 	faire-stage = release
-	faire-cmd = check .
-[datalad "containers.summary"]
-	image = code/containers/images/toy-1.0.sh
-	cmdexec = sh {img} {cmd}
+	faire-cmd = TODO .
+[datalad "containers.report"]
+	image = code/containers/images/TODO
+	cmdexec = {img} {cmd}
 	faire-check = advisory
 	faire-stage = collection
-	faire-cmd = summary .
+	faire-cmd = TODO .

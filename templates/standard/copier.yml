@@ -1,13 +1,15 @@
-# Reference template of a standard (converted) dataset, exercising every rule kind:
-# a primary conversion, a secondary rule combining the dataset with another stream,
-# an in-place rule, and a blocking and an advisory check.
+# Standard dataset starter, derived from `base`: placeholder rules converting a stream and
+# processing the dataset's own output, and two checks. Replace every TODO in
+# .datalad/config (images and commands) before publishing a version.
 collection_url:
   type: str
   help: Clone URL of the container collection
-primary_stream:
+collection_revision:
+  type: str
+  help: Tag or commit of the container collection to pin
+source:
   type: str
   default: dicoms
-secondary_stream:
-  type: str
-  default: physio
+  help: Identifier of the stream converted by the `convert` rule
 _answers_file: .copier-answers.yml
+_exclude: [copier.yml, .git]

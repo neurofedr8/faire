@@ -1,0 +1,26 @@
+[faire "collection.tools"]
+	url = {{ collection_url }}
+	path = code/containers
+	revision = {{ collection_revision }}
+# The single rule: one sample of the source to this dataset. Choose its granularity through
+# the entities in the patterns: here per subject, add {session} for per session.
+[datalad "containers.process"]
+	image = code/containers/images/TODO
+	cmdexec = {img} {cmd}
+	faire-sourcedata = {{ source }}
+	faire-input = sourcedata/{{ source }}/sub-{subject}/*
+	faire-output = sub-{subject}
+	faire-cmd = TODO {inputs} {outputs}
+[datalad "containers.validate"]
+	image = code/containers/images/TODO
+	cmdexec = {img} {cmd}
+	faire-check = blocking
+	faire-stage = collection
+	faire-stage = release
+	faire-cmd = TODO .
+[datalad "containers.report"]
+	image = code/containers/images/TODO
+	cmdexec = {img} {cmd}
+	faire-check = advisory
+	faire-stage = collection
+	faire-cmd = TODO .

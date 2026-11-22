@@ -30,7 +30,7 @@ DERIVED = {
     "{{ _copier_conf.answers_file }}.jinja": "{{ _copier_answers|to_nice_yaml }}",
     "README.md.jinja": "# {{ title }}\n",
     ".gitattributes": "* annex.largefiles=(not(mimetype=text/*))\n",
-    ".gitlab-ci.yml": (Path(__file__).parents[1] / "templates/standard/.gitlab-ci.yml")
+    ".gitlab-ci.yml": (Path(__file__).parents[1] / "templates/toy-standard/.gitlab-ci.yml")
     .read_text(),
     ".datalad/config.jinja": (
         '[faire "collection.toy"]\n\turl = {{ collection_url }}\n\tpath = code/containers\n'

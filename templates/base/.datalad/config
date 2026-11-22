@@ -1,0 +1,25 @@
+# Rules and checks are datalad-container entries with faire-* keys. Uncomment and adapt.
+#
+# A container collection, installed as a subdataset at a pinned revision:
+# [faire "collection.tools"]
+# 	url = https://example.org/containers.git
+# 	path = code/containers
+# 	revision = v1
+#
+# A primary rule, converting one sample of source `dicoms`:
+# [datalad "containers.convert"]
+# 	image = code/containers/images/converter-1.0.sif
+# 	cmdexec = apptainer run {img} {cmd}
+# 	faire-sourcedata = dicoms
+# 	faire-input = sourcedata/dicoms/*/sub-{subject}/ses-{session}/*
+# 	faire-output = sub-{subject}/ses-{session}
+# 	faire-cmd = convert {inputs} sub-{subject}/ses-{session}
+#
+# A blocking check, run at the collection and release stages:
+# [datalad "containers.validate"]
+# 	image = code/containers/images/validator-1.0.sif
+# 	cmdexec = apptainer run {img} {cmd}
+# 	faire-check = blocking
+# 	faire-stage = collection
+# 	faire-stage = release
+# 	faire-cmd = validate .

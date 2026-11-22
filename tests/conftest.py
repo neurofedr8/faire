@@ -224,7 +224,7 @@ def reference(tmp_path_factory) -> Reference:
     ds.repo.call_git(["tag", "v1"])
     return Reference(
         git_template_dir(REFERENCE / "stream", root / "stream"),
-        git_template_dir(REFERENCE / "standard", root / "standard"),
+        git_template_dir(REFERENCE / "toy-standard", root / "toy-standard"),
         git_template_dir(REFERENCE / "superdataset", root / "superdataset"),
         str(col),
     )

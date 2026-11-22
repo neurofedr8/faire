@@ -1,0 +1,4 @@
+# Base dataset template: fixed CI and no rules. Copy this directory to start a template of
+# your own, then add questions here and container entries in .datalad/config.
+_answers_file: .copier-answers.yml
+_exclude: [TEMPLATE.md, copier.yml, .git]

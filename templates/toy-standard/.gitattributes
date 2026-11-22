@@ -1,0 +1,2 @@
+* annex.largefiles=(not(mimetype=text/*))
+*.tsv merge=union

@@ -37,7 +37,7 @@ pytestmark = [
 ]
 
 IN_GIT = "* annex.largefiles=nothing\n"
-CI = (REFERENCE / "standard" / ".gitlab-ci.yml").read_text()
+CI = (REFERENCE / "toy-standard" / ".gitlab-ci.yml").read_text()
 ANSWERS = "{{ _copier_answers|to_nice_yaml }}"
 
 STANDARD_CONFIG = """[faire "collection.toy"]

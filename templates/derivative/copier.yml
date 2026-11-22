@@ -1,0 +1,15 @@
+# Derivative dataset starter, derived from `base`: one placeholder rule processing a source
+# dataset of the plan, and two checks. Replace every TODO in .datalad/config (images and
+# commands) before publishing a version.
+collection_url:
+  type: str
+  help: Clone URL of the container collection
+collection_revision:
+  type: str
+  help: Tag or commit of the container collection to pin
+source:
+  type: str
+  default: bids
+  help: Identifier of the dataset this one is derived from
+_answers_file: .copier-answers.yml
+_exclude: [copier.yml, .git]
