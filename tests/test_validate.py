@@ -198,3 +198,36 @@ def test_cli_invalid(tmp_path, doc):
     result = CliRunner().invoke(main, ["validate", str(bad)])
     assert result.exit_code == 1
     assert "sample_entities" in result.output
+
+
+S3 = "datalad-annex::?type=S3&encryption=none&bucket=studyx&fileprefix={}&host=s3.example.org"
+
+
+def test_s3_location_valid(doc):
+    ds(doc, "bids")["distribution"][2]["access_url"] = S3.format("rawbids/")
+    assert validate(doc) == []
+
+
+@pytest.mark.parametrize("missing", ["bucket", "encryption"])
+def test_s3_location_missing_parameter(doc, missing):
+    url = S3.format("rawbids/").replace(f"&{missing}=", "&x=")
+    ds(doc, "bids")["distribution"][2]["access_url"] = url
+    assert any("(GIN)" in m and repr(missing) in m for m in messages(doc))
+
+
+def test_s3_location_shared(doc):
+    ds(doc, "bids")["distribution"][2]["access_url"] = S3.format("study/")
+    ds(doc, "fmriprep")["distribution"][2]["access_url"] = S3.format("study/")
+    found = [m for m in messages(doc) if "is shared with" in m]
+    assert len(found) == 1 and "(bids)" in found[0] and "(fmriprep)" in found[0]
+
+
+def test_s3_location_shared_within_a_dataset_is_fine(doc):
+    for dist in ds(doc, "bids")["distribution"]:
+        dist["access_url"] = S3.format("rawbids/")
+    assert validate(doc) == []
+
+
+def test_s3_embedded_credentials(doc):
+    ds(doc, "bids")["distribution"][2]["access_url"] = S3.format("rawbids/") + "&embedcreds=yes"
+    assert any("(GIN)" in m and "embedcreds" in m for m in messages(doc))

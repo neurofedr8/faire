@@ -10,10 +10,27 @@ from dataclasses import dataclass, field
 from graphlib import TopologicalSorter
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl
 
 DERIVED_FROM = "IsDerivedFrom"
 STAGES = ("collection", "accepted", "release")
 ROOT = "."  # path of the study superdataset
+DATALAD_ANNEX = "datalad-annex::"
+AWS_HOST = "s3.amazonaws.com"  # git-annex's default S3 host
+
+
+def annex_parameters(url: str) -> dict[str, str] | None:
+    """Special-remote parameters of a ``datalad-annex::?<parameters>`` URL, in their order;
+    None for any other URL."""
+    if not url.startswith(DATALAD_ANNEX + "?"):
+        return None
+    return dict(parse_qsl(url[len(DATALAD_ANNEX) + 1:], keep_blank_values=True))
+
+
+def s3_parameters(url: str) -> dict[str, str] | None:
+    """Parameters of a ``datalad-annex::?type=S3&...`` URL; None for any other URL."""
+    params = annex_parameters(url)
+    return params if params and params.get("type", "").lower() == "s3" else None
 
 
 @dataclass(frozen=True)

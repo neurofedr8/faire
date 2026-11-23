@@ -86,6 +86,23 @@ def test_missing_credential(setup, monkeypatch):
     by_id(doc, "bids")["distribution"].pop()
 
 
+@pytest.mark.parametrize("absent", ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"])
+def test_missing_s3_credential(setup, monkeypatch, absent):
+    env, doc, _, ds = setup
+    url = "datalad-annex::?type=S3&encryption=none&bucket=studyx&fileprefix=rawbids/"
+    by_id(doc, "bids")["distribution"].append(env.dist("Lab S3", "release", url, RESTRICTED))
+    for variable in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
+        monkeypatch.setenv(variable, "x")
+    monkeypatch.delenv(absent)
+    remotes_before = set(ds.repo.get_remotes())
+    try:
+        with pytest.raises(SyncError, match=f"'Lab S3' needs {absent}"):
+            sync(Plan.from_document(doc), ds, "release", ["dev"], only="Lab S3")
+        assert set(ds.repo.get_remotes()) == remotes_before
+    finally:
+        by_id(doc, "bids")["distribution"].pop()
+
+
 def test_unknown_distribution(setup):
     _, doc, _, ds = setup
     with pytest.raises(SyncError, match="no accepted distribution titled 'Nope'"):

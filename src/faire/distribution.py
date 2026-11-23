@@ -42,12 +42,13 @@ def targets(plan: Plan, ds: Dataset, stage: str, only: str | None = None) -> lis
 
 
 def missing_credentials(ds: Dataset, target: Target, platform=None) -> str | None:
-    """Name of the environment variable a remote still to be created needs, if absent."""
-    if remotes.status(ds, target.spec) != "missing":
-        return None
+    """First absent environment variable the remote needs: to be created, or for every
+    transfer when its credentials are not stored with it (S3)."""
     host = remotes.host_of(platform.url) if platform and hasattr(platform, "url") else None
-    variable = remotes.CREDENTIALS.get(remotes.kind(target.spec.url, host))
-    return variable if variable and not os.environ.get(variable) else None
+    k = remotes.kind(target.spec.url, host)
+    if k not in remotes.EVERY_TRANSFER and remotes.status(ds, target.spec) != "missing":
+        return None
+    return next((v for v in remotes.CREDENTIALS.get(k, ()) if not os.environ.get(v)), None)
 
 
 def sync(plan: Plan, ds: Dataset, stage: str, refs: list[str], only: str | None = None,
@@ -57,7 +58,7 @@ def sync(plan: Plan, ds: Dataset, stage: str, refs: list[str], only: str | None 
     for t in found:  # fail before any transfer
         variable = missing_credentials(ds, t, platform)
         if variable:
-            raise SyncError(f"distribution {t.title!r} needs {variable} to create its remote")
+            raise SyncError(f"distribution {t.title!r} needs {variable} for its remote")
     lines = []
     remotes.verify_all(ds)
     for t in found:

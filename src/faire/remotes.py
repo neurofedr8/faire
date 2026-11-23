@@ -6,7 +6,10 @@ How a remote is created follows from the URL:
   git history lives on the platform. Repositories are located in the store by dataset id.
 - a local path, ``file://``, ``ssh://`` or ``host:path``: a plain sibling. A stream's URL is
   shared by its instances, so each instance gets ``<url>/<instance>``.
-- ``datalad-annex::``: needs the datalad-next extension (not supported yet).
+- ``datalad-annex::?type=S3&…``: an S3 bucket (git-annex S3 parameters). Early stages get a
+  content-only special remote; ``release`` also stores history there (datalad-next). A stream's
+  instances each store under ``<fileprefix><instance>/``.
+- other ``datalad-annex::`` URLs: not supported yet.
 - anything else must already exist and is added as is.
 """
 
@@ -15,11 +18,11 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from datalad.api import Dataset
 
-from faire.plan import Distribution
+from faire.plan import DATALAD_ANNEX, Distribution, annex_parameters, s3_parameters
 
 
 class RemoteError(RuntimeError):
@@ -51,18 +54,42 @@ def specs(distributions: Iterable[Distribution], instance: str | None = None) ->
         url = dist.access_url
         if instance and kind(url) == "plain":
             url = f"{url.rstrip('/')}/{instance}"
+        elif instance and kind(url) == "s3":
+            url = s3_url_for_instance(url, instance)
         out.append(RemoteSpec(name, url, dist.wanted, dist.stage))
     return out
 
 
 FORGES = {"gin.g-node.org": "gin"}
-CREDENTIALS = {"gin": "DATALAD_CREDENTIAL_GIN_TOKEN", "platform": "FAIRE_GITLAB_TOKEN"}
+CREDENTIALS = {
+    "gin": ("DATALAD_CREDENTIAL_GIN_TOKEN",),
+    "platform": ("FAIRE_GITLAB_TOKEN",),
+    "s3": ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"),
+}
+# kinds whose credentials are not stored with the remote: needed for every transfer
+EVERY_TRANSFER = {"s3"}
+
+
+def s3_url_for_instance(url: str, instance: str) -> str:
+    """The S3 URL of a stream instance: ``<instance>/`` appended to the ``fileprefix``."""
+    params = s3_parameters(url)
+    params["fileprefix"] = f"{params.get('fileprefix', '')}{instance}/"
+    return DATALAD_ANNEX + "?" + urlencode(params, safe="/:")
+
+
+def s3_initremote(name: str, url: str) -> list[str]:
+    """``git annex initremote`` arguments of a content-only S3 remote at ``url``."""
+    params = annex_parameters(url)
+    return ["initremote", name, *(f"{k}={v}" for k, v in params.items()), "autoenable=true"]
 
 
 def kind(url: str, platform_host: str | None = None) -> str:
-    """How a remote at ``url`` is created: ria, plain, gin, platform, datalad-annex, existing."""
+    """How a remote at ``url`` is created: ria, s3, plain, gin, platform, datalad-annex,
+    existing."""
     if url.startswith("ria+"):
         return "ria"
+    if s3_parameters(url) is not None:
+        return "s3"
     if url.startswith("datalad-annex::"):
         return "datalad-annex"
     host = host_of(url)
@@ -128,7 +155,8 @@ def _git_only(ds: Dataset, name: str) -> bool:
 def create(ds: Dataset, spec: RemoteSpec, storage_only: bool = True, platform=None) -> None:
     """Create (or enable) the remote if missing and set its wanted expression.
 
-    ``storage_only`` applies to RIA stores: early stages keep git history on the platform.
+    ``storage_only`` applies to RIA stores and S3: early stages keep git history on the
+    platform.
     """
     if spec.name not in ds.repo.get_remotes() and spec.name in special_names(ds):
         ds.repo.enable_remote(spec.name)
@@ -154,6 +182,14 @@ def create(ds: Dataset, spec: RemoteSpec, storage_only: bool = True, platform=No
                 ds.siblings("add", name=spec.name, url=spec.url, result_renderer="disabled")
                 # forges carry git only: annexed content needs a storage distribution
                 ds.config.set(f"remote.{spec.name}.annex-ignore", "true", scope="local")
+            elif k == "s3":
+                storage = spec.name if storage_only else f"{spec.name}-storage"
+                _s3_storage(ds, storage, spec.url)
+                if not storage_only:  # history too, through datalad-next's remote helper
+                    ds.repo.add_remote(spec.name, spec.url)
+                    ds.config.set(f"remote.{spec.name}.annex-ignore", "true", scope="local")
+                    ds.config.set(f"remote.{spec.name}.datalad-publish-depends", storage,
+                                  scope="local")
             elif k == "datalad-annex":
                 raise RemoteError(
                     f"{spec.name}: datalad-annex:: URLs need the datalad-next extension"
@@ -167,6 +203,15 @@ def create(ds: Dataset, spec: RemoteSpec, storage_only: bool = True, platform=No
     target = content_target(ds, spec.name)
     if not _git_only(ds, target):
         ds.repo.set_preferred_content("wanted", spec.wanted, remote=target)
+
+
+def _s3_storage(ds: Dataset, name: str, url: str) -> None:
+    """Content-only S3 special remote: enabled if known to git-annex, else initialised."""
+    if name in special_names(ds):
+        if name not in ds.repo.get_remotes():
+            ds.repo.enable_remote(name)
+    else:
+        ds.repo.call_annex(s3_initremote(name, url))
 
 
 def verify(ds: Dataset, name: str) -> None:

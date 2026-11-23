@@ -77,3 +77,25 @@ human landing page of the service.
 | `wanted` | yes | git-annex preferred-content expression selecting the content this remote receives, e.g. `not metadata=distribution-restrictions=*` |
 
 Each dataset lists its own distributions in full, even when several datasets push to the same host.
+
+### S3
+
+An S3 bucket is addressed with a `datalad-annex::` URL whose query holds the parameters of a
+git-annex [S3 special remote](https://git-annex.branchable.com/special_remotes/S3/):
+
+```json
+"access_url": "datalad-annex::?type=S3&encryption=none&bucket=studyx&fileprefix=rawbids/&host=s3.example.org&protocol=https&port=443"
+```
+
+- `bucket` and `encryption` are required; the bucket must exist. `host` defaults to AWS; use
+  `host`, `port`, `protocol`, `requeststyle=path` or `signature=v4` for other stores.
+- Each dataset needs its own location: two datasets may not share host, bucket and
+  `fileprefix`. A stream's instances share its URL; each stores under
+  `<fileprefix><site>_<instrument_id>/`.
+- `collection` and `accepted` remotes hold annexed content only (history stays on the
+  platform); a `release` remote holds history and content, and `datalad clone <access_url>`
+  installs the dataset from it (with [datalad-next](https://github.com/datalad/datalad-next)).
+  Recent git-annex asks a clone to confirm the bucket once before getting content:
+  `git annex verifyremote <name>-storage` (faire does this for its own remotes).
+- Credentials come from `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in the environment;
+  `embedcreds=yes` is refused.

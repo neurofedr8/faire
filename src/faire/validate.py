@@ -12,7 +12,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 from jsonschema import Draft202012Validator
 
-from faire.plan import DERIVED_FROM, ROOT
+from faire.plan import AWS_HOST, DERIVED_FROM, ROOT, s3_parameters
 
 SECRET_QUERY_KEYS = re.compile(r"(token|password|passwd|secret|api[_-]?key|access[_-]?key)", re.I)
 
@@ -54,6 +54,7 @@ def validate(doc: Any) -> list[Violation]:
     violations += _sources(datasets)
     violations += _instruments(datasets)
     violations += _urls(datasets)
+    violations += _s3(datasets)
     return violations
 
 
@@ -197,6 +198,33 @@ def _urls(datasets: list[dict]) -> list[Violation]:
                         "access_url must not carry credentials",
                     )
                 )
+    return out
+
+
+def _s3(datasets: list[dict]) -> list[Violation]:
+    """S3 locations: required parameters, no embedded credentials, one dataset per location."""
+    out = []
+    owners: dict[tuple[str, str, str], list[tuple[str, str]]] = {}
+    for i, d in enumerate(datasets):
+        for j, dist in enumerate(d.get("distribution", [])):
+            params = s3_parameters(dist["access_url"])
+            if params is None:
+                continue
+            where = f"{_where(i, d)}.distribution[{j}] ({dist['title']})"
+            for required in ("bucket", "encryption"):
+                if not params.get(required):
+                    out.append(Violation(where, f"S3 access_url must name {required!r}"))
+            if params.get("embedcreds", "").lower() == "yes":
+                out.append(Violation(where, "S3 access_url must not set embedcreds=yes"))
+            location = (params.get("host") or AWS_HOST, params.get("bucket", ""),
+                        params.get("fileprefix", ""))
+            owners.setdefault(location, []).append((d["dataset_id"]["identifier"], where))
+    for (host, bucket, prefix), found in owners.items():
+        if len({ident for ident, _ in found}) > 1:
+            out.append(Violation(
+                found[0][1],
+                f"S3 location {host}/{bucket}/{prefix} is shared with "
+                + ", ".join(where for _, where in found[1:])))
     return out
 
 

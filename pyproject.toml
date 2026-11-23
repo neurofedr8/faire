@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
   "click>=8.1",
   "datalad>=1.1",
+  "datalad-next>=1.6",
   "datalad-container>=1.2",
   "git-annex",
   "copier>=9.3",
