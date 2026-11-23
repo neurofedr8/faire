@@ -1,2 +1,3 @@
+* annex.backend=SHA256E
 * annex.largefiles=(not(mimetype=text/*))
 *.tsv merge=union

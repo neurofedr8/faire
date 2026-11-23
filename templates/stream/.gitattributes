@@ -1,3 +1,4 @@
+* annex.backend=SHA256E
 * annex.largefiles=anything
 README.md annex.largefiles=nothing
 .faire/** annex.largefiles=nothing
