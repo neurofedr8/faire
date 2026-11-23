@@ -37,8 +37,18 @@ class Process(BaseModel):
 		description = "name of another process that needs to be ran before that one, on the same branch"
 	)
 
+	args: list[str]
 
-class StudyDataset(BaseModel):
+
+class Distribution(BaseModel):
+
+	name: str
+	storage_remote: StorageRemote
+	license: str
+	lifecycle_stage: str
+
+
+class Dataset(BaseModel):
 
 	NAME: str
 	TEMPLATE_URL: Optional[str] = None
@@ -46,7 +56,7 @@ class StudyDataset(BaseModel):
 	processes: Dict[str, Process] = Field(
 			description = "list of processed that generate/modify content in that dataset"
 	)
-	remotes: Optional[list[StorageRemote]] = Field(
+	distributions: list[Distribution] = Field(
 		default_factory = lambda data: [StorageRemote(suffix=f".{data['NAME']}", wanted="include=*")],
 		description = "list of remotes where that dataset stores data"
 	)

@@ -1,0 +1,179 @@
+2025-09-30 09:39:10 |[93;20m WARNING  [0m|[93;20m matplotlib       [0m|[93;20m Matplotlib created a temporary cache directory at /tmp/matplotlib-bkueadkl because the default path (/home/mriqc/.config/matplotlib) is not a writable directory; it is highly recommended to set the MPLCONFIGDIR environment variable to a writable directory, in particular to speed up the import of Matplotlib and to better support multiprocessing.[0m
+usage: mriqc [-h] [--version] [-v] [--species {human,rat}]
+             [--participant-label PARTICIPANT_LABEL [PARTICIPANT_LABEL ...]]
+             [--bids-filter-file PATH] [--session-id [SESSION_ID ...]]
+             [--run-id [RUN_ID ...]] [--task-id [TASK_ID ...]]
+             [-m [{T1w,T2w,bold,dwi} ...]] [--dsname DSNAME]
+             [--bids-database-dir PATH] [--bids-database-wipe]
+             [--no-datalad-get] [--nprocs NPROCS]
+             [--omp-nthreads OMP_NTHREADS] [--mem MEMORY_GB] [--testing] [-f]
+             [--pdb] [-w WORK_DIR] [--verbose-reports] [--reports-only]
+             [--write-graph] [--dry-run] [--resource-monitor]
+             [--use-plugin USE_PLUGIN] [--crashfile-format {txt,pklz}]
+             [--no-sub] [--email EMAIL] [--webapi-url WEBAPI_URL]
+             [--webapi-port WEBAPI_PORT] [--upload-strict] [--notrack]
+             [--ants-float] [--ants-settings ANTS_SETTINGS]
+             [--min-dwi-length MIN_LEN_DWI] [--min-bold-length MIN_LEN_BOLD]
+             [--fft-spikes-detector] [--fd_thres FD_THRES] [--deoblique]
+             [--despike] [--start-idx START_IDX] [--stop-idx STOP_IDX]
+             bids_dir output_dir {participant,group} [{participant,group} ...]
+
+MRIQC 24.1.0.dev0+gd5b13cb5.d20240826 Automated Quality Control and visual
+reports for Quality Assessment of structural (T1w, T2w) and functional MRI of
+the brain. IMPORTANT: Anonymized quality metrics (IQMs) will be submitted to
+MRIQC's metrics repository. Submission of IQMs can be disabled using the
+``--no-sub`` argument. Please visit
+https://mriqc.readthedocs.io/en/latest/dsa.html to revise MRIQC's Data Sharing
+Agreement.
+
+positional arguments:
+  bids_dir              The root folder of a BIDS valid dataset (sub-XXXXX
+                        folders should be found at the top level in this
+                        folder).
+  output_dir            The directory where the output files should be stored.
+                        If you are running group level analysis this folder
+                        should be prepopulated with the results of the
+                        participant level analysis.
+  {participant,group}   Level of the analysis that will be performed. Multiple
+                        participant level analyses can be run independently
+                        (in parallel) using the same output_dir.
+
+options:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit
+  -v, --verbose         Increases log verbosity for each occurrence, debug
+                        level is -vvv. (default: 0)
+  --species {human,rat}
+                        Use appropriate template for population (default:
+                        human)
+
+Options for filtering BIDS queries:
+  --participant-label PARTICIPANT_LABEL [PARTICIPANT_LABEL ...], --participant_label PARTICIPANT_LABEL [PARTICIPANT_LABEL ...], --participant-labels PARTICIPANT_LABEL [PARTICIPANT_LABEL ...], --participant_labels PARTICIPANT_LABEL [PARTICIPANT_LABEL ...]
+                        A space delimited list of participant identifiers or a
+                        single identifier (the sub- prefix can be removed).
+                        (default: None)
+  --bids-filter-file PATH
+                        a JSON file describing custom BIDS input filter using
+                        pybids {<suffix>:{<entity>:<filter>,...},...}
+                        (https://github.com/bids-standard/pybids/blob/master/b
+                        ids/layout/config/bids.json) (default: None)
+  --session-id [SESSION_ID ...]
+                        Filter input dataset by session ID. (default: None)
+  --run-id [RUN_ID ...]
+                        DEPRECATED - This argument will be disabled. Use
+                        ``--bids-filter-file`` instead. (default: None)
+  --task-id [TASK_ID ...]
+                        Filter input dataset by task ID. (default: None)
+  -m [{T1w,T2w,bold,dwi} ...], --modalities [{T1w,T2w,bold,dwi} ...]
+                        Filter input dataset by MRI type. (default: ('T1w',
+                        'T2w', 'bold', 'dwi'))
+  --dsname DSNAME       A dataset name. (default: None)
+  --bids-database-dir PATH
+                        Path to an existing PyBIDS database folder, for faster
+                        indexing (especially useful for large datasets).
+                        (default: None)
+  --bids-database-wipe  Wipe out previously existing BIDS indexing caches,
+                        forcing re-indexing. (default: False)
+  --no-datalad-get      Disable attempting to get remote files in DataLad
+                        datasets. (default: True)
+
+Options to handle performance:
+  --nprocs NPROCS, --n_procs NPROCS, --n_cpus NPROCS, -n-cpus NPROCS
+                        Maximum number of simultaneously running parallel
+                        processes executed by *MRIQC* (e.g., several instances
+                        of ANTs' registration). However, when ``--nprocs`` is
+                        greater or equal to the ``--omp-nthreads`` option, it
+                        also sets the maximum number of threads that
+                        simultaneously running processes may aggregate
+                        (meaning, with ``--nprocs 16 --omp-nthreads 8`` a
+                        maximum of two 8-CPU-threaded processes will be
+                        running at a given time). Under this mode of
+                        operation, ``--nprocs`` sets the maximum number of
+                        processors that can be assigned work within an *MRIQC*
+                        job, which includes all the processors used by
+                        currently running single- and multi-threaded
+                        processes. If ``None``, the number of CPUs available
+                        will be automatically assigned (which may not be what
+                        you want in, e.g., shared systems like a HPC cluster.
+                        (default: None)
+  --omp-nthreads OMP_NTHREADS, --ants-nthreads OMP_NTHREADS
+                        Maximum number of threads that multi-threaded
+                        processes executed by *MRIQC* (e.g., ANTs'
+                        registration) can use. If ``None``, the number of CPUs
+                        available will be automatically assigned (which may
+                        not be what you want in, e.g., shared systems like a
+                        HPC cluster. (default: None)
+  --mem MEMORY_GB, --mem_gb MEMORY_GB, --mem-gb MEMORY_GB
+                        Upper bound memory limit for MRIQC processes.
+                        (default: None)
+  --testing             Use testing settings for a minimal footprint.
+                        (default: False)
+  -f, --float32         Cast the input data to float32 if it's represented in
+                        higher precision (saves space and improves
+                        performance). (default: True)
+  --pdb                 Open Python debugger (pdb) on exceptions. (default:
+                        False)
+
+Instrumental options:
+  -w WORK_DIR, --work-dir WORK_DIR
+                        Path where intermediate results should be stored.
+                        (default: /home/basile/data/src/ni-dataops/faire/work)
+  --verbose-reports
+  --reports-only
+  --write-graph         Write workflow graph. (default: False)
+  --dry-run             Do not run the workflow. (default: False)
+  --resource-monitor, --profile
+                        Hook up the resource profiler callback to nipype.
+                        (default: False)
+  --use-plugin USE_PLUGIN
+                        Nipype plugin configuration file. (default: None)
+  --crashfile-format {txt,pklz}
+                        Nipype crashfile format (default: txt)
+  --no-sub              Turn off submission of anonymized quality metrics to
+                        MRIQC's metrics repository. (default: False)
+  --email EMAIL         Email address to include with quality metric
+                        submission. (default: )
+  --webapi-url WEBAPI_URL
+                        IP address where the MRIQC WebAPI is listening.
+                        (default: None)
+  --webapi-port WEBAPI_PORT
+                        Port where the MRIQC WebAPI is listening. (default:
+                        None)
+  --upload-strict       Upload will fail if upload is strict. (default: False)
+  --notrack             Opt-out of sending tracking information of this run to
+                        the NiPreps developers. This information helps to
+                        improve MRIQC and provides an indicator of real world
+                        usage crucial for obtaining funding. (default: False)
+
+Specific settings for ANTs:
+  --ants-float          Use float number precision on ANTs computations.
+                        (default: False)
+  --ants-settings ANTS_SETTINGS
+                        Path to JSON file with settings for ANTs. (default:
+                        None)
+
+Diffusion MRI workflow configuration:
+  --min-dwi-length MIN_LEN_DWI
+                        Drop DWI runs with fewer orientations than this
+                        threshold. (default: 7)
+
+Functional MRI workflow configuration:
+  --min-bold-length MIN_LEN_BOLD
+                        Drop BOLD runs with fewer time points than this
+                        threshold. (default: 5)
+  --fft-spikes-detector
+                        Turn on FFT based spike detector (slow). (default:
+                        False)
+  --fd_thres FD_THRES   Threshold on framewise displacement estimates to
+                        detect outliers. (default: 0.2)
+  --deoblique           Deoblique the functional scans during head motion
+                        correction preprocessing. (default: False)
+  --despike             Despike the functional scans during head motion
+                        correction preprocessing. (default: False)
+  --start-idx START_IDX
+                        DEPRECATED Initial volume in functional timeseries
+                        that should be considered for preprocessing. (default:
+                        None)
+  --stop-idx STOP_IDX   DEPRECATED Final volume in functional timeseries that
+                        should be considered for preprocessing. (default:
+                        None)
