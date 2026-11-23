@@ -9,16 +9,10 @@ description = "Executable research data management from a machine-actionable DMP
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-<<<<<<< HEAD
-  "click>=8.1",
-  "datalad>=1.1",
-  "datalad-next>=1.6",
-  "datalad-container>=1.2",
-=======
   "click>=8.5.1",
   "datalad>=1.8.0",
   "datalad-container>=1.2.6",
->>>>>>> origin/main
+  "datalad-next>=1.6",
   "git-annex",
   "copier>=9.19.1",
   "jsonschema>=4.26.0",
