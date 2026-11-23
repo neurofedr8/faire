@@ -9,18 +9,18 @@ description = "Executable research data management from a machine-actionable DMP
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "click>=8.1",
-  "datalad>=1.1",
-  "datalad-container>=1.2",
+  "click>=8.5.1",
+  "datalad>=1.8.0",
+  "datalad-container>=1.2.6",
   "git-annex",
-  "copier>=9.3",
-  "jsonschema>=4.21",
-  "python-gitlab>=4.4",
-  "pyyaml>=6",
+  "copier>=9.19.1",
+  "jsonschema>=4.26.0",
+  "python-gitlab>=8.6.0",
+  "pyyaml>=6.0.3",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.5"]
+dev = ["pytest>=9.2.0", "ruff>=0.17.6"]
 
 [project.scripts]
 faire = "faire.cli:main"
