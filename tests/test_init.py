@@ -152,7 +152,7 @@ def test_platform_repositories(env):
     bids = platform.get_repository("lab/study/rawdata")
     entry = platform.entry(bids)
     assert entry.protected == {"base", "dev", "pilot", "convert/*", "convert-pilot/*"}
-    assert entry.approvals == 1
+    assert entry.merge_policy and entry.unmergeable == {"dev", "pilot"}
     assert entry.variables == {}  # downstream comes from the tracked ma-DMP
     sup = clone(source=platform.get_repository("lab/study/superdataset").url,
                 path=str(env.root / "user"), result_renderer="disabled")

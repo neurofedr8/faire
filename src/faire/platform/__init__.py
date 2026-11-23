@@ -66,14 +66,15 @@ class Platform(ABC):
         """Every repository under the root group, at any depth."""
 
     @abstractmethod
-    def protect_branch(self, repo: Repository, pattern: str) -> None:
-        """Only merged pull requests or maintainers (and the automation identity) may change
-        branches matching ``pattern``; their pipelines see protected CI variables."""
+    def protect_branch(self, repo: Repository, pattern: str, mergeable: bool = True) -> None:
+        """Only maintainers (and the automation identity) may push to branches matching
+        ``pattern``, and merge pull requests into them unless not ``mergeable`` (faire merges
+        those itself); their pipelines see protected CI variables."""
 
     @abstractmethod
-    def set_merge_policy(self, repo: Repository, approvals: int) -> None:
-        """Require ``approvals`` human approvals and a passing pipeline to merge, and allow
-        only merge commits (never squash): run records in commits must survive."""
+    def set_merge_policy(self, repo: Repository) -> None:
+        """Require a passing pipeline to merge, and allow only merge commits (never squash):
+        run records in commits must survive."""
 
     @abstractmethod
     def set_variable(self, repo: Repository, key: str, value: str) -> None: ...
@@ -93,6 +94,14 @@ class Platform(ABC):
 
     @abstractmethod
     def comment(self, repo: Repository, number: int, body: str) -> None: ...
+
+    @abstractmethod
+    def delete_branch(self, repo: Repository, branch: str) -> None:
+        """Delete ``branch``, protected or not (git cannot delete protected branches)."""
+
+    @abstractmethod
+    def approvers(self, repo: Repository, number: int) -> list[str]:
+        """Users who approved pull request ``number``, the automation identity excluded."""
 
     @abstractmethod
     def start_pipeline(self, repo: Repository, ref: str, variables: dict[str, str]) -> str:

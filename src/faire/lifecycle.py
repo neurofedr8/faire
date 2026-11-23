@@ -28,6 +28,7 @@ from faire.state import (
     BASE,
     TRAILER_PILOT,
     TRAILER_SAMPLE,
+    base_of,
     branch_base,
     branch_for,
     git,
@@ -380,6 +381,55 @@ def update(ds: Dataset, platform=None, repository=None) -> list[str]:
     ds.repo.call_git(["checkout", "-q", original or BASE])
     checkout_sources(ds)
     return lines
+
+
+def merge_session(ds: Dataset, platform, repository, checked: str | None = None,
+                  checks_pass=None) -> str:
+    """Merge the session branch into its target once its pull request is approved.
+
+    ``checked`` is the commit whose blocking checks passed (the CI pipeline's commit); the
+    session branch on origin must still be there. Without it (outside CI), the local branch
+    must match origin and ``checks_pass()`` runs the blocking checks. faire makes the merge
+    commit, so it follows the dataset's date settings. The session branch is then deleted;
+    the clone is left on the target."""
+    branch = active_branch(ds)
+    if sample_of(branch) is None:
+        raise LifecycleError(f"{branch!r} is not a session branch")
+    target = base_of(branch)
+    found = [pr for pr in platform.open_pull_requests(repository)
+             if (pr.source, pr.target) == (branch, target)]
+    if not found:
+        raise LifecycleError(f"no open pull request from {branch} into {target}")
+    approvers = platform.approvers(repository, found[0].number)
+    if not approvers:
+        raise LifecycleError(f"pull request {found[0].number} has no human approval")
+    _fetch(ds)
+    head = git(ds, "rev-parse", f"refs/remotes/origin/{branch}").strip()
+    if checked is None:
+        if ds.repo.get_hexsha() != head:
+            raise LifecycleError(f"local {branch} differs from origin; pull or push first")
+        if not checks_pass():
+            raise LifecycleError("blocking checks fail")
+    elif head != checked:
+        raise LifecycleError(f"{branch} moved past the checked commit {checked[:8]}")
+    message = (f"faire: merge {branch} into {target}\n\n"
+               + "\n".join(f"faire-approved-by: {a}" for a in approvers))
+    for attempt in range(UPDATE_RETRIES):
+        ds.repo.call_git(["checkout", "-q", "-B", target, f"refs/remotes/origin/{target}"])
+        try:
+            ds.repo.call_git(["merge", "-q", "--no-ff", "-m", message, head])
+        except CommandError as exc:
+            ds.repo.call_git(["merge", "--abort"])
+            raise LifecycleError(f"merging {branch} into {target} conflicts: {exc}") from exc
+        try:
+            _push(ds, target, ci=True)  # the target's pipeline syncs and triggers downstream
+            break
+        except CommandError:
+            if attempt == UPDATE_RETRIES - 1:
+                raise
+            _fetch(ds)  # another session was merged first
+    platform.delete_branch(repository, branch)  # the session is closed
+    return target
 
 
 def reviewer() -> str:

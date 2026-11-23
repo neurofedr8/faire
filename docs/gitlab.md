@@ -34,10 +34,15 @@ run would do.
   superdataset.
 - Protected branches: `base`, `dev`, `pilot`, `convert/*` and `convert-pilot/*` for datasets;
   `dev` for streams; `dev`, `main` and `rel/*` for the superdataset. Protection also exposes
-  protected CI variables to session branches.
-- Merge policy: merge commits only (no squash, no rebase, so run records survive), a passing
-  pipeline, and one approval through an approval rule named `faire: human approval`.
-  Approval rules need a GitLab tier that provides them.
+  protected CI variables to session branches. Nobody may merge into `dev` and `pilot`
+  through GitLab: sessions reach them through the manual `merge` job (`faire merge`), which
+  checks for an approval by someone other than faire's token user, so approvals work on every
+  tier.
+- Merge policy: merge commits only (no squash, no rebase, so run records survive) and a
+  passing pipeline.
+- GitLab Free cannot restrict pushes to one user, so maintainers can still push to `dev`. For
+  datasets with fake dates, a server hook on self-managed instances can reject commits dated
+  after 2018; otherwise `faire release` catches them before publication.
 - A copy of the ma-DMP in `.faire/dmp.json` (`dmp.json` in the superdataset), from which
   pipelines derive distributions and the downstream projects to trigger. Re-running init
   updates it after an edit.

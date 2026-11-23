@@ -38,8 +38,8 @@ DATASET_BRANCHES = ("base", "dev", "pilot")  # the first is the default branch
 STREAM_BRANCHES = ("dev",)
 SUPERDATASET_BRANCHES = ("dev", "main")
 PROTECTED = ("base", "dev", "pilot", "convert/*", "convert-pilot/*")
+MERGED_BY_FAIRE = ("dev", "pilot")  # session targets: no merge through the platform
 SUPERDATASET_PROTECTED = ("dev", "main", "rel/*")
-APPROVALS = 1
 
 
 class InitError(RuntimeError):
@@ -180,7 +180,8 @@ class Project:
         with tempfile.TemporaryDirectory() as tmp:
             rendered = Path(tmp) / "rendered"
             templates.render(template, rendered, self._context(unit))  # fails before creating
-            ds = create(path=str(path), **_quiet())
+            # fake dates must hold from the first commit, so they are enabled at creation
+            ds = create(path=str(path), fake_dates=templates.fake_dates(rendered), **_quiet())
             try:
                 ds.repo.call_git(["branch", "-M", branches[0]])
                 templates.merge(ds, rendered)
@@ -280,8 +281,10 @@ class Project:
             ds.repo.call_git(["push", *skip, "origin", *branches, "git-annex"])
         for pattern in (SUPERDATASET_PROTECTED if unit.is_superdataset
                         else STREAM_BRANCHES if unit.instrument else PROTECTED):
-            platform.protect_branch(repo, pattern)
-        platform.set_merge_policy(repo, APPROVALS)
+            # sessions reach dev and pilot only through `faire merge`
+            mergeable = unit.is_superdataset or unit.instrument or pattern not in MERGED_BY_FAIRE
+            platform.protect_branch(repo, pattern, mergeable=bool(mergeable))
+        platform.set_merge_policy(repo)
 
     # -- reconcile -----------------------------------------------------------------------------
 

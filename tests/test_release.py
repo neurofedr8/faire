@@ -129,3 +129,22 @@ def test_release_tag_and_install_without_platform(setup, tmp_path):
             b"\0out 01"
     finally:
         shutil.move(str(env.root / "gone"), str(proj.workdir))
+
+
+def test_real_dates_block_fake_dated_dataset(setup, tmp_path):
+    env, plan, proj, bids, _ = setup
+    # bids turns fake dates on, but its history already has real dates
+    bids.config.set("datalad.fake-dates", "true", scope="branch")
+    bids.save(path=".datalad/config", message="fake dates", result_renderer="disabled")
+    bids.repo.call_git(["push", "-q", "--no-verify", "origin", "dev"])
+    sup = superdataset(proj, tmp_path, "0.9")
+    before = sorted(p.name for p in (env.root / "mirror").glob("*")) \
+        if (env.root / "mirror").exists() else []
+    with pytest.raises(R.ReleaseError, match="bids: real date in commit"):
+        R.release(sup, plan)
+    after = sorted(p.name for p in (env.root / "mirror").glob("*")) \
+        if (env.root / "mirror").exists() else []
+    assert after == before
+    assert "rel/0.9" not in Dataset(proj.path("superdataset")).repo.get_branches()
+    bids.repo.call_git(["revert", "--no-edit", "HEAD"])
+    bids.repo.call_git(["push", "-q", "--no-verify", "origin", "dev"])

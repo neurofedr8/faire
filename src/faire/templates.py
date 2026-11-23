@@ -8,10 +8,14 @@ from typing import Any
 
 import copier
 from datalad.api import Dataset
+from datalad.runner.coreprotocols import StdOutCapture
+from datalad.runner.exception import CommandError
+from datalad.runner.gitrunner import GitWitlessRunner
 
 from faire.plan import Template
 
 ANSWERS_FILE = ".copier-answers.yml"
+FAKE_DATES = "datalad.fake-dates"
 
 
 class TemplateError(RuntimeError):
@@ -34,6 +38,20 @@ def render(template: Template, dest: Path, context: dict[str, Any]) -> None:
         raise TemplateError(
             f"cannot render {template.repository} at {template.version}: {exc}"
         ) from exc
+
+
+def fake_dates(rendered: Path) -> bool:
+    """Whether the rendered template's `.datalad/config` enables DataLad fake dates."""
+    config = rendered / ".datalad" / "config"
+    if not config.is_file():
+        return False
+    try:
+        out = GitWitlessRunner().run(
+            ["git", "config", "-f", str(config), "--bool", "--get", FAKE_DATES],
+            protocol=StdOutCapture)
+    except CommandError:  # unset
+        return False
+    return out["stdout"].strip() == "true"
 
 
 def config_entries(ds: Dataset, config_file: Path) -> list[tuple[str, str]]:
@@ -59,8 +77,10 @@ def merge(ds: Dataset, rendered: Path) -> None:
             continue
         dest = root / rel
         if rel == Path(".datalad/config"):
+            present = set(config_entries(ds, dest)) if dest.exists() else set()
             for key, value in config_entries(ds, src):
-                ds.config.add(key, value, scope="branch", reload=False)
+                if (key, value) not in present:  # e.g. fake dates, already set by create
+                    ds.config.add(key, value, scope="branch", reload=False)
             ds.config.reload()
         elif rel == Path(".gitattributes") and dest.exists():
             dest.write_text(dest.read_text().rstrip("\n") + "\n" + src.read_text())

@@ -1,14 +1,14 @@
 ## MODIFIED Requirements
 
 ### Requirement: Human approval
-Sessions SHALL be merged only by `faire merge`, never through the platform. On a session branch, `faire merge` SHALL refuse unless the session pull request has one human approval and the latest pipeline of its head passed; otherwise it SHALL merge the branch into its target with a merge commit, following the dataset's date settings, and push it. The pull request is then reported merged by the platform.
+Sessions SHALL be merged only by `faire merge`, never through the platform. On a session branch, `faire merge` SHALL refuse unless the session pull request has one human approval and the blocking checks passed on the commit being merged, which SHALL still be the head of the session branch; otherwise it SHALL merge the branch into its target with a merge commit, following the dataset's date settings, push it and delete the session branch. The pull request is then reported merged by the platform.
 
 #### Scenario: Checks pass
 - **WHEN** all blocking checks pass and nobody approved
 - **THEN** `faire merge` fails and the target branch is unchanged
 
 #### Scenario: Approved
-- **WHEN** the pull request is approved and its pipeline passed
+- **WHEN** the pull request is approved and its blocking checks passed
 - **THEN** the target branch has a merge commit of the session and the pull request is reported merged
 
 ## ADDED Requirements

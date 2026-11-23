@@ -17,5 +17,6 @@
  "pending": [
   "physio"
  ],
+ "merge": true,
  "downstream": []
 }

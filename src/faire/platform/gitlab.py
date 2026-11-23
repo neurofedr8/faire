@@ -10,8 +10,8 @@ from gitlab import exceptions as gle
 
 from faire.platform import Platform, PlatformError, PullRequest, Repository, credentials
 
-MAINTAINER = 40  # GitLab access level
-APPROVAL_RULE = "faire: human approval"
+MAINTAINER = 40  # GitLab access levels
+NO_ACCESS = 0
 
 
 class GitLabPlatform(Platform):
@@ -87,10 +87,11 @@ class GitLabPlatform(Platform):
             raise PlatformError(f"unknown repository {repo.path!r}")
         return project
 
-    def protect_branch(self, repo: Repository, pattern: str) -> None:
+    def protect_branch(self, repo: Repository, pattern: str, mergeable: bool = True) -> None:
         project = self._project(repo)
         payload = {"name": pattern, "push_access_level": MAINTAINER,
-                   "merge_access_level": MAINTAINER, "allow_force_push": False}
+                   "merge_access_level": MAINTAINER if mergeable else NO_ACCESS,
+                   "allow_force_push": False}
         for attempt in range(5):  # GitLab protects the first pushed branch itself, shortly after
             try:
                 project.protectedbranches.create(payload)
@@ -105,7 +106,7 @@ class GitLabPlatform(Platform):
             if attempt == 4:
                 raise PlatformError(f"GitLab: cannot protect {pattern!r} on {repo.path}")
 
-    def set_merge_policy(self, repo: Repository, approvals: int) -> None:
+    def set_merge_policy(self, repo: Repository) -> None:
         project = self._project(repo)
         project.only_allow_merge_if_pipeline_succeeds = True
         project.allow_merge_on_skipped_pipeline = False
@@ -115,17 +116,6 @@ class GitLabPlatform(Platform):
             project.save()
         except gle.GitlabError as exc:
             raise self._wrap(exc) from exc
-        if not approvals:
-            return
-        try:
-            names = {r.name for r in project.approvalrules.list(get_all=True)}
-            if APPROVAL_RULE not in names:
-                project.approvalrules.create(
-                    {"name": APPROVAL_RULE, "approvals_required": approvals}
-                )
-        except gle.GitlabError as exc:
-            if exc.response_code not in (403, 404):  # approval rules need a paid tier
-                raise self._wrap(exc) from exc
 
     def set_variable(self, repo: Repository, key: str, value: str) -> None:
         project = self._project(repo)
@@ -188,6 +178,23 @@ class GitLabPlatform(Platform):
             self._project(repo).mergerequests.get(number).notes.create({"body": body})
         except gle.GitlabError as exc:
             raise self._wrap(exc) from exc
+
+    def delete_branch(self, repo: Repository, branch: str) -> None:
+        try:
+            self._project(repo).branches.delete(branch)
+        except gle.GitlabError as exc:
+            raise self._wrap(exc) from exc
+
+    def approvers(self, repo: Repository, number: int) -> list[str]:
+        try:
+            state = self._project(repo).mergerequests.get(number).approvals.get()
+            if self.gl.user is None:
+                self.gl.auth()
+            me = self.gl.user.username
+        except gle.GitlabError as exc:
+            raise self._wrap(exc) from exc
+        names = [a["user"]["username"] for a in getattr(state, "approved_by", [])]
+        return [n for n in names if n != me]
 
     def start_pipeline(self, repo: Repository, ref: str, variables: dict[str, str]) -> str:
         try:

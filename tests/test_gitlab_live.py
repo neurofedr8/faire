@@ -1,7 +1,9 @@
 """End-to-end on a real GitLab, with the pipelines faire renders (opt-in).
 
 Set FAIRE_TEST_GITLAB_URL and FAIRE_TEST_GITLAB_TOKEN (a group access token, Owner, `api`
-scope), and optionally FAIRE_TEST_GITLAB_GROUP (default `faire_dev`). Each run works in a new
+scope), and optionally FAIRE_TEST_GITLAB_GROUP (default `faire_dev`) and
+FAIRE_TEST_GITLAB_REVIEWER_TOKEN (another identity approving sessions; by default a group
+access token created in the subgroup). Each run works in a new
 subgroup, deleted afterwards unless FAIRE_TEST_KEEP is set.
 
 Runners only need a stock alpine image: FAIRE_SETUP installs git-annex, DataLad and this
@@ -16,6 +18,7 @@ import time
 import uuid
 from pathlib import Path
 
+import gitlab
 import pytest
 from datalad.api import create
 
@@ -29,6 +32,7 @@ from test_tasks import received
 URL = os.environ.get("FAIRE_TEST_GITLAB_URL")
 TOKEN = os.environ.get("FAIRE_TEST_GITLAB_TOKEN")
 PARENT = os.environ.get("FAIRE_TEST_GITLAB_GROUP", "faire_dev")
+REVIEWER_TOKEN = os.environ.get("FAIRE_TEST_GITLAB_REVIEWER_TOKEN")
 ROOT = Path(__file__).parents[1]
 
 pytestmark = [
@@ -144,9 +148,10 @@ def toy_collection(platform: GitLabPlatform, path: str, work: Path) -> str:
 class Live:
     """The study's platform (its own subgroup) and the sandbox around it."""
 
-    def __init__(self, platform: GitLabPlatform, tools: GitLabPlatform):
+    def __init__(self, platform: GitLabPlatform, tools: GitLabPlatform, reviewer):
         self.platform, self.tools, self.gl = platform, tools, platform.gl
         self.sandbox = platform.group  # where the study's repositories are
+        self.reviewer = reviewer  # a python-gitlab client of another identity
 
     def project(self, path: str):
         return self.gl.projects.get(f"{self.sandbox}/{path}")
@@ -193,6 +198,21 @@ class Live:
                 time.sleep(15)
         raise AssertionError(f"cannot merge !{mr.iid} on {path}")
 
+    def merge_session(self, path: str, mr) -> None:
+        """The reviewer approves, then plays the manual merge job of the session pipeline."""
+        project = self.project(path)
+        self.reviewer.projects.get(project.id).mergerequests.get(mr.iid).approve()
+        assert self.platform.approvers(self.platform.get_repository(project.path_with_namespace),
+                                       mr.iid), "the approval is not seen as human"
+        [latest] = project.pipelines.list(ref=mr.source_branch, get_all=False, per_page=1)
+        for bridge in project.pipelines.get(latest.id).bridges.list(get_all=True):
+            child = project.pipelines.get(bridge.downstream_pipeline["id"])
+            for job in child.jobs.list(get_all=True):
+                if job.name == "merge":
+                    project.jobs.get(job.id).play()
+                    return
+        raise AssertionError(f"no merge job in the last pipeline of {mr.source_branch}")
+
     def tags(self, path: str) -> set[str]:
         return {t.name for t in self.project(path).tags.list(get_all=True)}
 
@@ -208,8 +228,13 @@ def live(tmp_path):
                                ("FAIRE_IMAGE", "alpine:3", False),
                                ("FAIRE_SETUP", setup_script(src), False)]:
         group.variables.create({"key": key, "value": value, "masked": masked, "raw": True})
+    token = REVIEWER_TOKEN or group.access_tokens.create({
+        "name": "reviewer", "scopes": ["api"], "access_level": 40,
+        "expires_at": time.strftime("%Y-%m-%d", time.gmtime(time.time() + 2 * 86400)),
+    }).token
+    reviewer = gitlab.Gitlab(URL, private_token=token)
     try:
-        yield Live(GitLabPlatform(URL, TOKEN, f"{sandbox}/study"), tools), tmp_path
+        yield Live(GitLabPlatform(URL, TOKEN, f"{sandbox}/study"), tools, reviewer), tmp_path
     finally:
         if not os.environ.get("FAIRE_TEST_KEEP"):
             parent.gl.groups.delete(sandbox)
@@ -249,9 +274,14 @@ def test_session_reaches_a_release_tag(live, tmp_path_factory, templates_root):
                                                      recursive=True, get_all=True)]
     assert "sub-01/ses-a/anat/scan.dat" in files and "sub-01/sub-01_sessions.tsv" in files
 
-    # reviewed and merged, then released from rel/1.0 and tagged once merged into main
-    live.merge("rawdata", mr)
+    # approved and merged by faire's manual job, then released from rel/1.0 and tagged once
+    # merged into main
+    live.merge_session("rawdata", mr)
     live.settle("rawdata")
+    merged = bids.mergerequests.get(mr.iid)
+    assert merged.state == "merged", merged.state
+    assert "convert/subject-01_session-a" not in [b.name for b in bids.branches.list(
+        get_all=True)]
     live.project("superdataset").branches.create({"branch": "rel/1.0", "ref": "dev"})
     rel = live.merge_request("superdataset", "rel/1.0", "main", timeout=3000)
     live.settle("superdataset")

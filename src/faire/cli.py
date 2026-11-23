@@ -262,15 +262,20 @@ def run_cmd(dataset_path, task_id, run_all, no_push) -> None:
 @click.option("--check", "only", help="Run only this check.")
 def test_cmd(dataset_path, stage, only) -> None:
     """Run the checks of STAGE; exit non-zero when a blocking check fails."""
+
+    ds = _dataset(dataset_path)
+    if not _run_checks(ds, stage, only):
+        sys.exit(1)
+
+
+def _run_checks(ds, stage: str, only: str | None = None) -> bool:
+    """Run and report the checks of ``stage``; False when a blocking one fails."""
+    from faire import lifecycle as L
     from faire import tasks as T
     from faire.state import sample_of
 
-    ds = _dataset(dataset_path)
-    branch = ds.repo.get_active_branch() or ""
-    sample = sample_of(branch)
+    sample = sample_of(ds.repo.get_active_branch() or "")
     waived = _waived(ds, sample)
-    from faire import lifecycle as L
-
     results = []
     if sample and stage == "collection" and only in (None, L.COMPLETENESS):
         ok, text = L.completeness(ds, sample)
@@ -286,8 +291,7 @@ def test_cmd(dataset_path, stage, only) -> None:
         for m in r.modified:
             click.echo(f"  modified the dataset: {m}")
         failed |= r.blocking and not r.passed
-    if failed:
-        sys.exit(1)
+    return not failed
 
 
 def _waived(ds, sample) -> tuple[str, ...]:
@@ -362,6 +366,28 @@ def mark_cmd(assignment, dataset_path, by, no_push) -> None:
     except L.LifecycleError as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"{stream}: {result}")
+
+
+@main.command("merge")
+@click.option("--dataset", "dataset_path", default=".", type=click.Path(file_okay=False))
+def merge_cmd(dataset_path) -> None:
+    """Merge the current session into its target once its pull request is approved.
+
+    In CI, the job runs after the blocking checks of CI_COMMIT_SHA passed; elsewhere the
+    checks run first. Needs CI_SERVER_URL, CI_PROJECT_PATH and FAIRE_GITLAB_TOKEN."""
+    import os
+
+    from faire import lifecycle as L
+
+    ds = _dataset(dataset_path)
+    platform, repo = _platform_from_env()
+    checked = os.environ.get("CI_COMMIT_SHA") or None
+    try:
+        target = L.merge_session(ds, platform, repo, checked,
+                                 lambda: _run_checks(ds, "collection"))
+    except L.LifecycleError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"merged into {target}")
 
 
 @main.command("sync")

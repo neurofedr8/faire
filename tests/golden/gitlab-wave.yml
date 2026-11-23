@@ -3,6 +3,7 @@ stages:
 - tasks
 - status
 - checks
+- merge
 - downstream
 default:
   image: $FAIRE_IMAGE

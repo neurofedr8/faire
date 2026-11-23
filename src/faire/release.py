@@ -3,7 +3,8 @@ and tag it once everything is reachable.
 
 On ``rel/<version>``: point every registered dataset at its ``dev`` head (once), require each
 ``sourcedata/`` pointer to be an ancestor of its released source, report derived datasets
-lacking samples of their sources, run release checks, fulfil ``release`` distributions, and
+lacking samples of their sources, refuse real dates in datasets using fake dates, run release
+checks, fulfil ``release`` distributions, and
 require every commit and its wanted content to be on every release remote. Nothing is pushed to
 a release remote before the checks pass. On ``main`` (after the reviewed merge): tag the
 superdataset and every dataset at its released commit, and push the tags.
@@ -18,6 +19,7 @@ from pathlib import Path
 
 from datalad.api import Dataset
 from datalad.runner.exception import CommandError
+from datalad.support.repodates import check_dates
 
 from faire import remotes
 from faire.branches import bump_source, checkout_sources
@@ -28,6 +30,7 @@ from faire.state import TRAILER_SAMPLE, git, log, tree
 from faire.tasks import run_checks
 
 PREFIX = "rel/"
+DATES_REFERENCE = 1514764800  # 2018-01-01, the default of `datalad check-dates`
 TRAILER_RELEASE = "faire-release"
 
 
@@ -148,6 +151,31 @@ def lagging(found: list[Member]) -> list[str]:
     return lines
 
 
+def fake_dated(ds: Dataset, commit: str) -> bool:
+    """Whether the dataset's committed configuration at ``commit`` enables fake dates."""
+    try:
+        value = git(ds, "config", "--blob", f"{commit}:.datalad/config", "--bool",
+                    "--get", "datalad.fake-dates")
+    except CommandError:  # no such file or key
+        return False
+    return value.strip() == "true"
+
+
+def real_dates(sup: Dataset, found: list[Member]) -> list[str]:
+    """Dates after the reference in fake-dated datasets: commits reachable from the released
+    commit, annotated tags and the git-annex branch (`datalad check-dates`)."""
+    errors = []
+    for ds, commit in _all(sup, found):
+        if not fake_dated(ds, commit):
+            continue
+        report = check_dates(ds.repo, DATES_REFERENCE, revs=[commit])
+        for oid, info in sorted(report["objects"].items()):
+            what = info.get("filename") or info["type"]
+            errors.append(f"{ds.config.get(DATASET_ID) or ds.path}: real date in {what} "
+                          f"{oid[:8]}")
+    return errors
+
+
 def release_checks(found: list[Member]) -> list[str]:
     failures = []
     for m in found:
@@ -219,6 +247,9 @@ def release(sup: Dataset, plan: Plan, platform=None, repository=None) -> list[st
     if errors:
         raise ReleaseError("\n".join(errors))
     lines += lagging(found)
+    errors = real_dates(sup, found)
+    if errors:
+        raise ReleaseError("\n".join(errors))
     failures = release_checks(found)
     if failures:
         raise ReleaseError("\n".join(failures))

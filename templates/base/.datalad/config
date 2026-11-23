@@ -1,5 +1,10 @@
 # Rules and checks are datalad-container entries with faire-* keys. Uncomment and adapt.
 #
+# Fake dates, so that commit dates do not disclose when data was acquired: every commit and
+# tag faire makes is then dated from 2005 on, and `faire release` refuses real dates.
+# [datalad]
+# 	fake-dates = true
+#
 # A container collection, installed as a subdataset at a pinned revision:
 # [faire "collection.tools"]
 # 	url = https://example.org/containers.git

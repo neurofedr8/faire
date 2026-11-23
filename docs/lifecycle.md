@@ -12,8 +12,13 @@ Upstream changes land on `base` only. The `update` task (`faire run --task updat
 on `base`) points the sources at their `dev` heads, merges `base` into `dev`, `pilot` and every
 open session, and opens a session branch with a draft pull request for each new sample of a
 primary source. A session branch therefore differs from `dev` by its sample's outputs and
-status only. Merging it needs passing blocking checks (including `completeness`) and one
-human approval; squash merges are refused so run records survive.
+status only. Sessions are merged by faire, never through the platform: once the blocking
+checks (including `completeness`) passed, the session pipeline offers a manual `merge` job.
+`faire merge` refuses unless the pull request has a human approval and the branch is still at
+the checked commit; it then merges with a merge commit (never squashed, so run records
+survive), pushes the target and deletes the session branch. Because faire makes the merge
+commit, datasets whose template sets `datalad.fake-dates = true` keep fake dates throughout,
+and `faire release` refuses to publish one whose history holds a real date.
 
 A merge into `dev` syncs the `accepted` distributions and triggers the `base` pipeline of the
 datasets derived from this one. Pilots do not cascade.

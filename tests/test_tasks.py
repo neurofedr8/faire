@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 from click.testing import CliRunner
 from datalad.api import Dataset, clone
 
@@ -150,7 +151,7 @@ def test_render_golden():
     checks = [Check("validate", True, ("collection",), "check ."),
               Check("summary", False, ("collection",), "summary .")]
     wave = T.Pipeline(tasks=tasks)
-    settled = T.Pipeline(checks=checks, pending=("physio",))
+    settled = T.Pipeline(checks=checks, pending=("physio",), merge=True)
     for name, pipe in [("wave", wave), ("settled", settled)]:
         assert T.render_gitlab(pipe) == (GOLDEN / f"gitlab-{name}.yml").read_text()
         assert T.render_github(pipe) + "\n" == (GOLDEN / f"github-{name}.json").read_text()
@@ -164,7 +165,13 @@ def test_render_wave_and_settled():
                                       pending=("physio",)))
     assert "faire test --stage collection --check 'validate'" in text
     assert "faire mark 'physio=missing'" in text and "when: manual" in text
-    assert "faire run" not in text
+    assert "faire run" not in text and "faire merge" not in text
+    settled = T.render_gitlab(T.Pipeline(checks=[Check("validate", True, ("collection",), ""),
+                                                 Check("summary", False, ("collection",), "")],
+                                         merge=True))
+    merge = yaml.safe_load(settled)["merge"]
+    assert merge["script"] == ["faire merge"] and merge["when"] == "manual"
+    assert merge["needs"] == ["check-validate"]  # blocking checks only
 
 
 def test_branch_decides(project, tmp_path):
@@ -195,6 +202,7 @@ def test_next_wave_and_loop_guard(project, tmp_path):
     T.run_all(ds)
     settled = T.pipeline(ds, "convert/subject-05_session-a")
     assert not settled.tasks and "completeness" in [c.name for c in settled.checks]
+    assert settled.merge
     for _ in range(2):
         ds.repo.call_git(["commit", "-q", "--allow-empty", "-m",
                           "faire: deface x\n\nfaire-rule: deface\n"

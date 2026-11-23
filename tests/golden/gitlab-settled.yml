@@ -3,6 +3,7 @@ stages:
 - tasks
 - status
 - checks
+- merge
 - downstream
 default:
   image: $FAIRE_IMAGE
@@ -31,5 +32,13 @@ mark-missing-physio:
   script:
   - faire mark 'physio=missing'
   needs: []
+  when: manual
+  allow_failure: true
+merge:
+  stage: merge
+  script:
+  - faire merge
+  needs:
+  - check-validate
   when: manual
   allow_failure: true

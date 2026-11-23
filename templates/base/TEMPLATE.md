@@ -9,7 +9,12 @@ and no rule or check. To make a template of your own:
    `faire.template.data`.
 3. Declare a container collection and your rules and checks in `.datalad/config`
    (see the commented example there).
-4. Keep `.gitlab-ci.yml` as is: it only runs `faire plan` and executes its output.
-5. Tag a version and reference repository and tag from the ma-DMP.
+4. To keep commit dates from disclosing when data was acquired, enable DataLad fake dates
+   with `datalad.fake-dates = true` in `.datalad/config`: faire then fake-dates every commit
+   and tag from the dataset's first, and `faire release` fails on any real date. Storage
+   remotes that run git-annex themselves (siblings over SSH) currently record real dates in
+   the `git-annex` branch.
+5. Keep `.gitlab-ci.yml` as is: it only runs `faire plan` and executes its output.
+6. Tag a version and reference repository and tag from the ma-DMP.
 
 This file is excluded from rendered datasets.

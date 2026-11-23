@@ -341,15 +341,16 @@ class Pipeline:
     stage: str = "collection"
     pending: tuple[str, ...] = ()  # streams a reviewer may declare absent
     downstream: tuple[str, ...] = ()  # repositories whose base is triggered
+    merge: bool = False  # a manual `faire merge` once the blocking checks passed
 
 
 def pipeline(ds: Dataset, branch: str, stage: str = "collection",
              downstream: tuple[str, ...] = (), sync: bool = False,
              superdataset: bool = False) -> Pipeline:
     """The pipeline of ``branch``: ``update`` on ``base``; sync and downstream triggers on
-    ``dev`` (pilots do not cascade); tasks then status, or checks when nothing is due, on a
-    session branch; release on the superdataset's ``rel/*`` and tagging on its ``main``;
-    nothing elsewhere."""
+    ``dev`` (pilots do not cascade); tasks then status, or checks and a manual merge when
+    nothing is due, on a session branch; release on the superdataset's ``rel/*`` and tagging
+    on its ``main``; nothing elsewhere."""
     from faire import lifecycle as L
 
     if superdataset and branch.startswith("rel/"):
@@ -373,7 +374,7 @@ def pipeline(ds: Dataset, branch: str, stage: str = "collection",
     if stage == "collection":
         checks = [Check(L.COMPLETENESS, True, ("collection",), ""), *checks]
         pending = tuple(s for s, v in L.compute(ds, label, branch).items() if v == L.PENDING)
-    return Pipeline(checks=checks, stage=stage, pending=pending)
+    return Pipeline(checks=checks, stage=stage, pending=pending, merge=True)
 
 
 def downstream_paths(project_path: str, own: str, targets: list[str]) -> tuple[str, ...]:
@@ -387,7 +388,7 @@ def render_gitlab(p: Pipeline) -> str:
     """A GitLab child pipeline. Task pushes skip CI; ``status`` ends the wave and starts the
     next one when the branch moved. Checks and manual waiver jobs run on a settled branch."""
     jobs: dict[str, dict] = {
-        "stages": ["jobs", "tasks", "status", "checks", "downstream"],
+        "stages": ["jobs", "tasks", "status", "checks", "merge", "downstream"],
         # CI checks out a detached commit; faire reads the session from the branch
         "default": {"image": "$FAIRE_IMAGE", "before_script": BEFORE_SCRIPT},
     }
@@ -413,6 +414,12 @@ def render_gitlab(p: Pipeline) -> str:
             "stage": "checks", "script": [f"faire mark '{stream}=missing'"], "needs": [],
             "when": "manual", "allow_failure": True,
         }
+    if p.merge:  # runs only once every blocking check of this commit passed
+        jobs["merge"] = {
+            "stage": "merge", "script": ["faire merge"],
+            "needs": [_job("check-", c.name) for c in p.checks if c.blocking],
+            "when": "manual", "allow_failure": True,
+        }
     for path in p.downstream:
         jobs[_job("trigger-", path)] = {"stage": "downstream", "inherit": {"default": False},
                                         "trigger": {"project": path, "branch": BASE}}
@@ -431,6 +438,7 @@ def render_github(p: Pipeline) -> str:
         "status": bool(p.tasks),
         "checks": {"include": [{"check": c.name, "blocking": c.blocking} for c in p.checks]},
         "pending": list(p.pending),
+        "merge": p.merge,
         "downstream": list(p.downstream),
     }, indent=1)
 

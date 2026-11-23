@@ -167,3 +167,56 @@ def test_pilot_isolation(project, tmp_path, platform):
     assert ds.repo.get_hexsha() == origin.repo.get_hexsha("base")
     T.run_all(ds)
     assert origin.repo.get_hexsha("dev") == dev_before
+
+
+def session_ready(project, tmp_path, subject):
+    """A platform whose repository is the dataset's origin, and a converted session."""
+    from faire.platform import Repository
+    from faire.platform.fake import FakeRepo
+
+    fake = FakePlatform(tmp_path / "platform")
+    repo = Repository("lab/study/rawdata", str(project.path("rawdata")))
+    fake.repos[repo.path] = FakeRepo(repo)
+    mri(project, tmp_path, subject)
+    physio(project, tmp_path, subject)
+    ds = bids(project, tmp_path)
+    L.update(ds, fake, repo)
+    branch = f"convert/subject-{subject}_session-a"
+    on(ds, branch)
+    T.run_all(ds)
+    on(ds, branch)
+    [pr] = [p for p in fake.open_pull_requests(repo) if p.source == branch]
+    return fake, repo, ds, pr
+
+
+def test_merge_refusals(project, tmp_path):
+    fake, repo, ds, pr = session_ready(project, tmp_path, "11")
+    origin = Dataset(project.path("rawdata"))
+    dev = origin.repo.get_hexsha("dev")
+    head = ds.repo.get_hexsha()
+    with pytest.raises(L.LifecycleError, match="no human approval"):
+        L.merge_session(ds, fake, repo, head)
+    fake.approve(repo, pr.number, "reviewer")
+    with pytest.raises(L.LifecycleError, match="moved past the checked commit"):
+        L.merge_session(ds, fake, repo, ds.repo.get_hexsha("HEAD~1"))
+    with pytest.raises(L.LifecycleError, match="blocking checks fail"):
+        L.merge_session(ds, fake, repo, None, lambda: False)
+    assert origin.repo.get_hexsha("dev") == dev
+    assert pr in fake.open_pull_requests(repo)
+
+
+def test_merge_approved_session(project, tmp_path):
+    fake, repo, ds, pr = session_ready(project, tmp_path, "12")
+    fake.approve(repo, pr.number, "reviewer")
+    head = ds.repo.get_hexsha()
+    assert L.merge_session(ds, fake, repo, head) == "dev"
+    origin = Dataset(project.path("rawdata"))
+    parents = origin.repo.call_git(["rev-list", "--parents", "-n1", "dev"]).split()[1:]
+    assert head in parents and len(parents) == 2  # a merge commit, never a fast-forward
+    assert "faire-approved-by: reviewer" in origin.repo.call_git(["log", "-1", "dev"])
+    assert pr not in fake.open_pull_requests(repo)
+    assert "convert/subject-12_session-a" not in origin.repo.get_branches()
+    # outside CI, passing checks are enough besides the approval
+    fake2, repo2, ds2, pr2 = session_ready(project, tmp_path / "b", "13")
+    fake2.approve(repo2, pr2.number, "reviewer")
+    assert L.merge_session(ds2, fake2, repo2, None, lambda: True) == "dev"

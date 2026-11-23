@@ -136,7 +136,33 @@ class CI:
         self.pipeline(path, branch)
 
     def merge(self, path: str, branch: str, target: str) -> None:
-        """A reviewer approves the pull request; the platform merges it."""
+        """A reviewer approves the session's pull request and runs the manual merge job of
+        its settled pipeline."""
+        repo = self._repo(path)
+        [pr] = [pr for pr in self.platform.open_pull_requests(repo)
+                if pr.source == branch and pr.target == target]
+        self.platform.approve(repo, pr.number, "reviewer")
+        ds = self.clone(path, branch)
+        self.current = f"{GROUP}/{path}"
+        self.mp.setenv("CI_PROJECT_PATH", self.current)
+        self.mp.setenv("CI_COMMIT_SHA", ds.repo.get_hexsha())
+        jobs = yaml.safe_load(self.faire(ds, "faire plan --ci-render gitlab")[1])
+        assert jobs["merge"]["needs"] == [f"check-{c}" for c in self.blocking(path, branch)]
+        code, out = self.faire(ds, "faire merge")
+        assert code == 0, out
+        assert pr not in self.platform.open_pull_requests(repo)
+        self.pipeline(path, target)
+
+    def blocking(self, path: str, branch: str) -> list[str]:
+        """Blocking checks of the last pipeline of ``branch``, all of which passed."""
+        assert self.failed_checks[(path, branch)] == []
+        ds = self.clone(path, branch)
+        jobs = yaml.safe_load(self.faire(ds, "faire plan --ci-render gitlab")[1])
+        return [k.removeprefix("check-") for k, v in jobs.items()
+                if k.startswith("check-") and not v["allow_failure"]]
+
+    def platform_merge(self, path: str, branch: str, target: str) -> None:
+        """A reviewer merges the pull request on the platform (the release into main)."""
         repo = self._repo(path)
         assert any(pr.source == branch and pr.target == target
                    for pr in self.platform.open_pull_requests(repo)), branch
@@ -224,7 +250,7 @@ def test_study_from_index_to_release(study):
     superdataset = platform.get_repository(f"{GROUP}/superdataset")
     assert any(pr.source == "rel/1.0" and pr.target == "main"
                for pr in platform.open_pull_requests(superdataset))
-    ci.merge("superdataset", "rel/1.0", "main")
+    ci.platform_merge("superdataset", "rel/1.0", "main")
 
     for path in ("superdataset", "rawdata", "derivatives/fmriprep"):
         tags = Dataset(platform.get_repository(f"{GROUP}/{path}").url).repo.call_git(["tag"])
