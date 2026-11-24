@@ -10,15 +10,15 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - name: Install git-annex
         run: sudo apt-get update && sudo apt-get install -y git-annex
-      - name: Start MinIO (S3 store for tests/test_s3_live.py)
-        # a step, not a service: service containers cannot pass MinIO its `server` command
+      - name: Start Silo (S3 store for tests/test_s3_live.py)
+        # a step, not a service: service containers cannot pass the `server` command
         run: |
-          docker run -d --name minio -p 9000:9000 \
+          docker run -d --name silo -p 9000:9000 \
             -e MINIO_ROOT_USER=faire -e MINIO_ROOT_PASSWORD=faire-test-secret \
-            minio/minio server /data
-          docker run --rm --network host --entrypoint sh minio/mc -c \
-            "until mc alias set local http://localhost:9000 faire faire-test-secret; do sleep 1; done \
-             && mc mb local/faire-test"
+            docker.io/pgsty/silo:latest server /data
+          until curl -sf http://localhost:9000/minio/health/live; do sleep 1; done
+          docker exec silo mcli alias set local http://127.0.0.1:9000 faire faire-test-secret
+          docker exec silo mcli mb local/faire-test
       - name: Install
         run: uv venv && uv pip install -e '.[dev]'
       - name: Lint

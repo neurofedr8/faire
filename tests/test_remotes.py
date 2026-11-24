@@ -48,7 +48,7 @@ def test_initremote_arguments():
 
 
 # A git-annex directory special remote stands in for a bucket: creation, pushes and clones run
-# the real code paths, only the S3 transport is not exercised (see the opt-in MinIO test).
+# the real code paths, only the S3 transport is not exercised (see the opt-in Silo test).
 @pytest.fixture
 def bucket(tmp_path, monkeypatch):
     real = remotes.kind

@@ -1,4 +1,4 @@
-"""S3 distributions against a real object store (opt-in; MinIO in the tool's CI).
+"""S3 distributions against a real object store (opt-in; Silo in the tool's CI).
 
 Set FAIRE_TEST_S3_HOST (e.g. `localhost`), AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, and
 optionally FAIRE_TEST_S3_PORT (default 9000), FAIRE_TEST_S3_PROTOCOL (default `http`) and
