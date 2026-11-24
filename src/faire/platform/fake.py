@@ -16,6 +16,7 @@ class FakeRepo:
     repo: Repository
     protected: set[str] = field(default_factory=set)
     merge_policy: bool = False
+    default_branch: str | None = None
     unmergeable: set[str] = field(default_factory=set)  # merged only by faire
     variables: dict[str, str] = field(default_factory=dict)
     pull_requests: list[PullRequest] = field(default_factory=list)
@@ -66,6 +67,9 @@ class FakePlatform(Platform):
             entry.unmergeable.discard(pattern)
         else:
             entry.unmergeable.add(pattern)
+
+    def set_default_branch(self, repo: Repository, branch: str) -> None:
+        self.entry(repo).default_branch = branch
 
     def set_merge_policy(self, repo: Repository) -> None:
         self.entry(repo).merge_policy = True

@@ -5,7 +5,7 @@
 | Repository | Branches |
 |---|---|
 | sourcedata stream instance | `dev`: everything indexed; pilot items carry a `faire-pilot: true` trailer |
-| standard or derived dataset | `base` (default): template content, rules, checks and `sourcedata/` pointers; `dev`: accepted data; `pilot`: pilot data, never merged into `dev`; `convert/<sample>` and `convert-pilot/<sample>`: one session under review each |
+| standard or derived dataset | `base`: template content, rules, checks and `sourcedata/` pointers; `dev`: accepted data; `pilot`: pilot data, never merged into `dev`; `convert/<sample>` and `convert-pilot/<sample>`: one session under review each |
 | superdataset (path `.`) | `dev`: registered datasets and the ma-DMP; `rel/<version>`: a release in preparation; `main`: released versions, tagged |
 
 Upstream changes land on `base` only. The `update` task (`faire run --task update`, planned

@@ -62,7 +62,7 @@ partial, one per line).
 
 ## Branches
 
-- `base` (default branch): template content, rules, checks and `sourcedata/` pointers. Upstream
+- `base`: template content, rules, checks and `sourcedata/` pointers. Upstream
   changes land here only.
 - `convert/<sample>` and `convert-pilot/<sample>`: one per session, started from `base`, merged
   into `dev` or `pilot` after review. Their diff is the sample's outputs and status only.

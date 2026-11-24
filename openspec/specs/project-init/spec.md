@@ -64,7 +64,7 @@ With a platform configured, init SHALL create a repository per dataset at `<grou
 - **THEN** the same datasets, links and remotes exist locally and no platform request is made
 
 ### Requirement: Branches and platform policies
-Init SHALL create `base` as the default branch of each standard and derived dataset, with `dev` and `pilot` starting from it. It SHALL protect `base`, `dev`, `pilot` and session branches, require one approval to merge a session, and forbid squash merges.
+Init SHALL create `base` as the default branch of each standard and derived dataset, with `dev` and `pilot` starting from it. It SHALL make `dev` the default branch of every platform repository, where pull requests go. It SHALL protect `base`, `dev`, `pilot` and session branches, require one approval to merge a session, and forbid squash merges.
 
 #### Scenario: Base branch
 - **WHEN** init creates `bids`

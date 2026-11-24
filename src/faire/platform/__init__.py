@@ -72,6 +72,10 @@ class Platform(ABC):
         those itself); their pipelines see protected CI variables."""
 
     @abstractmethod
+    def set_default_branch(self, repo: Repository, branch: str) -> None:
+        """Make ``branch`` (already pushed) the default branch of the repository."""
+
+    @abstractmethod
     def set_merge_policy(self, repo: Repository) -> None:
         """Require a passing pipeline to merge, and allow only merge commits (never squash):
         run records in commits must survive."""

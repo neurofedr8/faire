@@ -160,6 +160,8 @@ class Project:
             if repo is not None:
                 with self.platform.git_auth():
                     ds = clone(source=repo.url, path=str(path), **_quiet())
+                # the platform's default is `dev`; reconcile works on the first branch
+                ds.repo.call_git(["checkout", "-q", _branches(unit)[0]])
                 self._fresh.add(unit.logical)
                 return ds
         return None
@@ -279,6 +281,7 @@ class Project:
         skip = ["-o", "ci.skip"] if platform.name == "gitlab" else []  # creating starts nothing
         with platform.git_auth():
             ds.repo.call_git(["push", *skip, "origin", *branches, "git-annex"])
+        platform.set_default_branch(repo, default_branch(unit))
         for pattern in (SUPERDATASET_PROTECTED if unit.is_superdataset
                         else STREAM_BRANCHES if unit.instrument else PROTECTED):
             # sessions reach dev and pilot only through `faire merge`
@@ -402,6 +405,12 @@ def _branches(unit: Unit) -> tuple[str, ...]:
     if unit.is_superdataset:
         return SUPERDATASET_BRANCHES
     return STREAM_BRANCHES if unit.instrument else DATASET_BRANCHES
+
+
+def default_branch(unit: Unit) -> str:
+    """The platform's default branch, where pull requests go: `dev` everywhere. Datasets are
+    released as tags on `dev` commits and `main` only exists in the superdataset."""
+    return "dev"
 
 
 def _key(unit: Unit) -> tuple[str, str | None]:

@@ -106,6 +106,14 @@ class GitLabPlatform(Platform):
             if attempt == 4:
                 raise PlatformError(f"GitLab: cannot protect {pattern!r} on {repo.path}")
 
+    def set_default_branch(self, repo: Repository, branch: str) -> None:
+        project = self._project(repo)
+        project.default_branch = branch
+        try:
+            project.save()
+        except gle.GitlabError as exc:
+            raise self._wrap(exc) from exc
+
     def set_merge_policy(self, repo: Repository) -> None:
         project = self._project(repo)
         project.only_allow_merge_if_pipeline_succeeds = True

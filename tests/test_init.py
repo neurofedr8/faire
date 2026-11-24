@@ -154,6 +154,7 @@ def test_platform_repositories(env):
     assert entry.protected == {"base", "dev", "pilot", "convert/*", "convert-pilot/*"}
     assert entry.merge_policy and entry.unmergeable == {"dev", "pilot"}
     assert entry.variables == {}  # downstream comes from the tracked ma-DMP
+    assert all(platform.entry(r).default_branch == "dev" for r in platform.list_repositories())
     sup = clone(source=platform.get_repository("lab/study/superdataset").url,
                 path=str(env.root / "user"), result_renderer="disabled")
     sup.get("derivatives/fmriprep", get_data=False, result_renderer="disabled")
