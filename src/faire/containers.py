@@ -59,12 +59,24 @@ def collections(ds: Dataset) -> list[Collection]:
     return out
 
 
+def _commit(repo, revision: str) -> str:
+    """Resolve a tag, commit or branch to a commit. A branch that only exists as
+    `origin/<name>` in a fresh clone is resolved through its remote-tracking name, because
+    `git checkout <name>` would create a local branch, which `--detach` rejects."""
+    for candidate in (revision, f"origin/{revision}"):
+        try:
+            return repo.call_git(["rev-parse", "--verify", "-q", f"{candidate}^{{commit}}"]).strip()
+        except Exception:
+            continue
+    raise ContainerError(f"revision {revision!r} not found")
+
+
 def install(ds: Dataset, col: Collection) -> None:
     """Install a collection as a subdataset at its pinned revision (not saved)."""
     try:
         sub = clone(source=col.url, path=str(Path(ds.path) / col.path), dataset=ds,
                     result_renderer="disabled")
-        sub.repo.call_git(["checkout", "-q", "--detach", col.revision])
+        sub.repo.call_git(["checkout", "-q", "--detach", _commit(sub.repo, col.revision)])
     except Exception as exc:
         raise ContainerError(
             f"cannot install collection {col.name!r} from {col.url}: {exc}"
