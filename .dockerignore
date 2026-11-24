@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+.pytest_cache
+.ruff_cache
+.agents
+.claude
+openspec
+tests
+docs
+examples
+**/__pycache__
+**/*.egg-info
+dist
+uv.lock

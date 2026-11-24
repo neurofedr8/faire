@@ -20,4 +20,4 @@ See `openspec/changes/madmp-dataops-foundation/` for the specification.
 
 ### nostalgia (ref for the French who were old enough in late nineties)
 |La barre de faire quoi? 
-|La [barre de faire](docs/assets/barre_de_faire.png) tout!
+|La [barre de faire](https://www.youtube.com/watch?v=SeToVbTA_ls) tout!

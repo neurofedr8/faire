@@ -13,7 +13,6 @@ dependencies = [
   "datalad>=1.8.0",
   "datalad-container>=1.2.6",
   "datalad-next>=1.6",
-  "git-annex",
   "copier>=9.19.1",
   "jsonschema>=4.26.0",
   "python-gitlab>=8.6.0",
