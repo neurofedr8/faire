@@ -34,6 +34,16 @@ datasets derived from this one. Pilots do not cascade.
 A distribution's `wanted` expression is set as the remote's preferred content, so later plain
 `datalad push` calls honour it too.
 
+## Indexing
+
+`faire index <instance> <directory>` adds received items to one stream instance, given as a
+local clone or a repository URL (cloned once into `--clone`, default `./<repository name>`, and
+reused). It needs nothing else: the ma-DMP copy, the heuristic and the `collection` remotes come
+from the instance, whose `dev` is first fast-forwarded to `origin`. Items the heuristic
+attributes to another instrument than the instance's are refused. Content goes to the existing
+`collection` remotes (created by `faire init`) before history is pushed to `origin`, over HTTPS
+with `FAIRE_GITLAB_TOKEN` when set.
+
 ## Release
 
 1. Create `rel/<version>` from the superdataset's `dev`. Its pipeline runs `faire release`:

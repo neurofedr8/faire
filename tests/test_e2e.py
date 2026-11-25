@@ -200,10 +200,10 @@ def study(tmp_path, reference, templates_root, monkeypatch):
 
 
 def index(proj, ci, stream, name, instrument, files):
-    Indexer(proj, stream).index(received(ci.root / f"in-{stream}-{name}", name, instrument,
-                                         files))
-    instance = proj.plan.datasets[stream].instruments[0].instance
-    ci.pipeline(f"sourcedata/{stream}/{instance}", "dev")
+    instance = f"sourcedata/{stream}/{proj.plan.datasets[stream].instruments[0].instance}"
+    Indexer(Dataset(proj.path(instance))).index(
+        received(ci.root / f"in-{stream}-{name}", name, instrument, files))
+    ci.pipeline(instance, "dev")
 
 
 def test_study_from_index_to_release(study):

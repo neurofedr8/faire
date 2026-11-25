@@ -434,3 +434,18 @@ def set_submodule_url(ds: Dataset, sub: str, url: str) -> None:
                           f"submodule.{sub}.datalad-url"], expect_fail=True)
     except CommandError:
         pass
+
+
+def dataset_plan(ds: Dataset) -> tuple[Plan | None, Unit | None]:
+    """(plan, unit) of a dataset clone, from the ma-DMP it tracks; (None, None) without one."""
+    from faire.plan import load_document
+
+    for name in (DMP_COPY, DMP_FILE):
+        path = Path(ds.path) / name
+        if path.is_file():
+            plan = Plan.from_document(load_document(path))
+            ident, instance = ds.config.get(DATASET_ID), ds.config.get(INSTANCE)
+            unit = next((u for u in layout.units(plan) if u.dataset.id == ident and
+                         (u.instrument.instance if u.instrument else None) == instance), None)
+            return plan, unit
+    return None, None

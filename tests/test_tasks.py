@@ -36,11 +36,18 @@ def project(tmp_path_factory, reference, templates_root):
     return proj
 
 
+MRI, PHYSIO = "sourcedata/dicoms/a_PrismaFit16001", "sourcedata/physio/a_Biopac01"
+
+
+def stream(project, instance) -> Indexer:
+    return Indexer(Dataset(project.path(instance)))
+
+
 def index(project, tmp, subject, physio=b"physio"):
-    Indexer(project, "dicoms").index(received(tmp / "mri", f"sub-{subject}_ses-a",
-                                              "PrismaFit16001", {"scan.dat": b"mri " + physio}))
-    Indexer(project, "physio").index(received(tmp / "phys", f"sub-{subject}_ses-a", "Biopac01",
-                                              {"rec.log": physio}))
+    stream(project, MRI).index(received(tmp / "mri", f"sub-{subject}_ses-a", "PrismaFit16001",
+                                        {"scan.dat": b"mri " + physio}))
+    stream(project, PHYSIO).index(received(tmp / "phys", f"sub-{subject}_ses-a", "Biopac01",
+                                           {"rec.log": physio}))
 
 
 def session(project, tmp: Path, subject: str, name="clone") -> Dataset:
@@ -110,8 +117,8 @@ def test_source_moved(project, tmp_path):
     assert bump_source(ds, "sourcedata/physio/a_Biopac01")
     ds.save(message="bump", result_renderer="disabled")
     assert T.plan(ds) == []
-    Indexer(project, "physio").index(received(tmp_path / "late", "sub-02_ses-a", "Biopac01",
-                                              {"rec2.log": b"more"}))
+    stream(project, PHYSIO).index(received(tmp_path / "late", "sub-02_ses-a", "Biopac01",
+                                           {"rec2.log": b"more"}))
     assert bump_source(ds, "sourcedata/physio/a_Biopac01")
     assert ids(T.plan(ds)) == ["merge-physio:subject-02_session-a"]
 

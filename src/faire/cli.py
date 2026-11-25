@@ -97,54 +97,68 @@ def init_cmd(dmp_file, workdir, platform_kind, group, platform_url, dry_run) -> 
         sys.exit(1)
 
 
-def _project(dmp_file: str, workdir: str, platform_kind: str, group, platform_url):
-    from faire.plan import Plan
-    from faire.project import Project
-
-    doc = load_document(dmp_file)
-    violations = validate(doc)
-    if violations:
-        for v in violations:
-            click.echo(str(v), err=True)
-        raise click.ClickException("the ma-DMP is not valid")
-    return Project(Plan.from_document(doc), dmp_file, workdir,
-                   _platform(platform_kind, group, platform_url))
-
-
-def project_options(func):
-    """Options locating the project: its ma-DMP, working directory and platform."""
-    for option in reversed([
-        click.option("--dmp", "dmp_file", required=True,
-                     type=click.Path(exists=True, dir_okay=False), help="The ma-DMP file."),
-        click.option("--workdir", type=click.Path(file_okay=False), default=".",
-                     help="Working directory holding one clone per repository."),
-        click.option("--platform", "platform_kind", type=click.Choice(["none", "gitlab"]),
-                     default="none"),
-        click.option("--group", help="Root group on the platform."),
-        click.option("--platform-url", help="Platform URL."),
-    ]):
-        func = option(func)
-    return func
-
-
 @main.command("index")
-@click.argument("stream")
+@click.argument("dataset")
 @click.argument("directory", type=click.Path(exists=True, file_okay=False))
-@project_options
+@click.option("--clone", "clone_path", type=click.Path(file_okay=False),
+              help="Where a DATASET URL is cloned (default: ./<repository name>).")
 @click.option("--dry-run", is_flag=True, help="Show the heuristic's decisions only.")
-def index_cmd(stream, directory, dmp_file, workdir, platform_kind, group, platform_url,
-              dry_run) -> None:
-    """Add the received files in DIRECTORY to the sourcedata stream STREAM."""
+def index_cmd(dataset, directory, clone_path, dry_run) -> None:
+    """Add the received files in DIRECTORY to the stream instance DATASET.
+
+    DATASET is a local clone or the URL of the instance's repository. Pushing over HTTPS
+    authenticates with FAIRE_GITLAB_TOKEN when set, else with git's own credentials."""
+    import os
+    from contextlib import nullcontext
     from pathlib import Path
 
     from faire.indexing import Indexer, IndexingError
+    from faire.platform import credentials
 
-    project = _project(dmp_file, workdir, platform_kind, group, platform_url)
+    local = Path(dataset).exists()
+    url = None if local else dataset
+    path = Path(dataset) if local else Path(clone_path or _repository_name(dataset))
+    if local and clone_path:
+        raise click.UsageError("--clone applies to a DATASET URL only")
+    if url is None and path.is_dir():
+        from datalad.api import Dataset
+
+        repo = Dataset(path).repo
+        url = repo.config.get("remote.origin.url") if repo else None
+    token = os.environ.get("FAIRE_GITLAB_TOKEN")
+    auth = (credentials.git_auth(url, token) if token and url and url.startswith("http")
+            else nullcontext())
     try:
-        for line in Indexer(project, stream).index(Path(directory), dry_run=dry_run):
-            click.echo(line)
+        with auth:
+            ds = _dataset(str(path)) if local else _clone(url, path)
+            for line in Indexer(ds).index(Path(directory), dry_run=dry_run):
+                click.echo(line)
     except IndexingError as exc:
         raise click.ClickException(str(exc)) from exc
+
+
+def _repository_name(url: str) -> str:
+    return url.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1].removesuffix(".git")
+
+
+def _same_url(url: str) -> str:
+    """Comparable form of a clone source: DataLad records ``file://`` URLs as paths."""
+    from urllib.parse import unquote, urlsplit
+
+    return unquote(urlsplit(url).path) if url.startswith("file://") else url
+
+
+def _clone(url: str, path):
+    """A clone of ``url`` at ``path``: reused when it is one, cloned when absent."""
+    from datalad.api import Dataset, clone
+
+    if path.exists() and any(path.iterdir()):
+        ds = Dataset(path)
+        origin = ds.repo.config.get("remote.origin.url") if ds.repo else None
+        if origin is None or _same_url(origin) != _same_url(url):
+            raise click.ClickException(f"{path} exists and is not a clone of {url}")
+        return ds
+    return clone(source=url, path=str(path), result_renderer="disabled")
 
 
 def _dataset(path: str):
@@ -167,22 +181,9 @@ def _dataset(path: str):
 
 
 def _dataset_plan(ds):
-    """(plan, unit) of a dataset clone, from the ma-DMP it tracks; (None, None) without one."""
-    from pathlib import Path
+    from faire.project import dataset_plan
 
-    from faire import layout
-    from faire.plan import Plan, load_document
-    from faire.project import DATASET_ID, DMP_COPY, DMP_FILE, INSTANCE
-
-    for name in (DMP_COPY, DMP_FILE):
-        path = Path(ds.path) / name
-        if path.is_file():
-            plan = Plan.from_document(load_document(path))
-            ident, instance = ds.config.get(DATASET_ID), ds.config.get(INSTANCE)
-            unit = next((u for u in layout.units(plan) if u.dataset.id == ident and
-                         (u.instrument.instance if u.instrument else None) == instance), None)
-            return plan, unit
-    return None, None
+    return dataset_plan(ds)
 
 
 @main.command("plan")

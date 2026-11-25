@@ -20,7 +20,7 @@ from pathlib import Path
 
 import gitlab
 import pytest
-from datalad.api import create
+from datalad.api import Dataset, create
 
 from conftest import REFERENCE, git_template, make_env, write_doc
 from faire.indexing import Indexer
@@ -263,8 +263,8 @@ def test_session_reaches_a_release_tag(live, tmp_path_factory, templates_root):
 
     # a session arrives: the stream pipeline triggers bids, which opens and converts it
     with platform.git_auth():
-        Indexer(proj, "dicoms").index(received(tmp / "in", "sub-01_ses-a", "PrismaFit16001",
-                                               {"scan.dat": b"mri 01"}))
+        Indexer(Dataset(proj.path("sourcedata/dicoms/a_PrismaFit16001"))).index(
+            received(tmp / "in", "sub-01_ses-a", "PrismaFit16001", {"scan.dat": b"mri 01"}))
     live.settle("sourcedata/dicoms/a_PrismaFit16001")
     mr = live.merge_request("rawdata", "convert/subject-01_session-a", "dev")
     live.settle("rawdata")

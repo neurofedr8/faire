@@ -31,13 +31,14 @@ def platform(tmp_path):
 
 def mri(project, tmp, subject, pilot=False):
     name = f"sub-{subject}_ses-a" + ("_pilot" if pilot else "")
-    Indexer(project, "dicoms").index(received(tmp / f"mri{subject}", name, "PrismaFit16001",
-                                              {"scan.dat": b"mri"}))
+    Indexer(Dataset(project.path("sourcedata/dicoms/a_PrismaFit16001"))).index(
+        received(tmp / f"mri{subject}", name, "PrismaFit16001", {"scan.dat": b"mri"}))
 
 
 def physio(project, tmp, subject):
-    Indexer(project, "physio").index(received(tmp / f"phys{subject}", f"sub-{subject}_ses-a",
-                                              "Biopac01", {"rec.log": b"physio"}))
+    Indexer(Dataset(project.path("sourcedata/physio/a_Biopac01"))).index(
+        received(tmp / f"phys{subject}", f"sub-{subject}_ses-a", "Biopac01",
+                 {"rec.log": b"physio"}))
 
 
 def bids(project, tmp, name="bids"):
