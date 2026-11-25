@@ -14,7 +14,7 @@ from faire.templates import TemplateError
 from faire.validate import validate
 
 UNITS = ["sourcedata/dicoms/a_PrismaFit16001", "sourcedata/physio/a_Biopac01", "rawdata",
-         "derivatives/fmriprep", "superdataset"]
+         "derivatives/fmriprep", "study"]
 
 
 def run(env, doc, workdir=None, platform=None, dry_run=False):
@@ -133,7 +133,7 @@ def test_release_distribution_gets_no_remote(env):
 
 def test_superdataset_clone(shared, tmp_path):
     env, _, proj, _ = shared
-    sup = clone(source=str(proj.path("superdataset")), path=str(tmp_path / "user"),
+    sup = clone(source=str(proj.path("study")), path=str(tmp_path / "user"),
                 result_renderer="disabled")
     sup.get(".", recursive=True, recursion_limit=1, get_data=False, result_renderer="disabled")
     for path, ident in [("rawdata", "bids"), ("derivatives/fmriprep", "fmriprep")]:
@@ -155,7 +155,7 @@ def test_platform_repositories(env):
     assert entry.merge_policy and entry.unmergeable == {"dev", "pilot"}
     assert entry.variables == {}  # downstream comes from the tracked ma-DMP
     assert all(platform.entry(r).default_branch == "dev" for r in platform.list_repositories())
-    sup = clone(source=platform.get_repository("lab/study/superdataset").url,
+    sup = clone(source=platform.get_repository("lab/study/study").url,
                 path=str(env.root / "user"), result_renderer="disabled")
     sup.get("derivatives/fmriprep", get_data=False, result_renderer="disabled")
     assert Dataset(Path(sup.path) / "derivatives/fmriprep").config.get(P.DATASET_ID) == "fmriprep"
@@ -199,7 +199,7 @@ def test_dry_run(created, env):
 def test_new_derivative(created, env):
     doc, proj, _ = created
     before = {u: Dataset(proj.path(u)).repo.get_hexsha() for u in UNITS
-              if u != "superdataset"}
+              if u != "study"}
     doc["dmp"]["dataset"].append(env.dataset("mriqc", "MRIQC", env.derived_tpl,
                                              path="derivatives/mriqc", sources=["bids"]))
     _, report = run(env, doc)

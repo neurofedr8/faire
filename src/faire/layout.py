@@ -10,7 +10,6 @@ from dataclasses import dataclass
 
 from faire.plan import Dataset, Instrument, Plan
 
-SUPERDATASET = "superdataset"
 SOURCEDATA = "sourcedata"
 
 
@@ -40,8 +39,8 @@ class Unit:
 def logical_path(dataset: Dataset, instrument: Instrument | None = None) -> str:
     if instrument is not None:
         return f"{SOURCEDATA}/{dataset.id}/{instrument.instance}"
-    if dataset.is_superdataset:
-        return SUPERDATASET
+    if dataset.is_superdataset:  # its path `.` names no repository
+        return dataset.id
     return dataset.path or dataset.id
 
 
@@ -65,7 +64,7 @@ def units(plan: Plan) -> list[Unit]:
 
 
 def superdataset(plan: Plan) -> Unit:
-    return Unit(SUPERDATASET, plan.superdataset)
+    return Unit(logical_path(plan.superdataset), plan.superdataset)
 
 
 def registered(plan: Plan) -> list[Unit]:

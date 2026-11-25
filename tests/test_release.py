@@ -53,7 +53,7 @@ def commit(ds: Dataset, files: dict[str, bytes], sample: str | None = None) -> N
 
 
 def superdataset(proj, tmp, version) -> Dataset:
-    sup = clone(source=str(proj.path("superdataset")), path=str(tmp / "sup"),
+    sup = clone(source=str(proj.path("study")), path=str(tmp / "sup"),
                 result_renderer="disabled")
     sup.repo.call_git(["checkout", "-q", "-b", f"rel/{version}", "refs/remotes/origin/dev"])
     return sup
@@ -108,7 +108,7 @@ def test_release_tag_and_install_without_platform(setup, tmp_path):
     assert pipeline(sup, "main", superdataset=True).jobs == [("tag", "faire release --tag")]
     lines = R.tag(sup, plan)
     assert len(lines) == 3
-    for logical in ("rawdata", "derivatives/fmriprep", "superdataset"):
+    for logical in ("rawdata", "derivatives/fmriprep", "study"):
         assert R._has_tag(Dataset(proj.path(logical)), "1.0"), logical
     mirror = Dataset(env.root / "mirror" / "fmriprep")
     assert R._has_tag(mirror, "1.0")
@@ -145,6 +145,6 @@ def test_real_dates_block_fake_dated_dataset(setup, tmp_path):
     after = sorted(p.name for p in (env.root / "mirror").glob("*")) \
         if (env.root / "mirror").exists() else []
     assert after == before
-    assert "rel/0.9" not in Dataset(proj.path("superdataset")).repo.get_branches()
+    assert "rel/0.9" not in Dataset(proj.path("study")).repo.get_branches()
     bids.repo.call_git(["revert", "--no-edit", "HEAD"])
     bids.repo.call_git(["push", "-q", "--no-verify", "origin", "dev"])

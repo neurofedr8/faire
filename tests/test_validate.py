@@ -231,3 +231,11 @@ def test_s3_location_shared_within_a_dataset_is_fine(doc):
 def test_s3_embedded_credentials(doc):
     ds(doc, "bids")["distribution"][2]["access_url"] = S3.format("rawbids/") + "&embedcreds=yes"
     assert any("(GIN)" in m and "embedcreds" in m for m in messages(doc))
+
+
+def test_superdataset_named_after_its_identifier(doc):
+    from faire import layout
+
+    plan = Plan.from_document(doc)
+    assert layout.superdataset(plan).logical == "studyx"
+    assert layout.units(plan)[-1].logical == "studyx"

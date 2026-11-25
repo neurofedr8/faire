@@ -282,13 +282,13 @@ def test_session_reaches_a_release_tag(live, tmp_path_factory, templates_root):
     assert merged.state == "merged", merged.state
     assert "convert/subject-01_session-a" not in [b.name for b in bids.branches.list(
         get_all=True)]
-    live.project("superdataset").branches.create({"branch": "rel/1.0", "ref": "dev"})
-    rel = live.merge_request("superdataset", "rel/1.0", "main", timeout=3000)
-    live.settle("superdataset")
-    live.merge("superdataset", rel)
-    live.settle("superdataset")
-    assert live.failed("superdataset") == []
-    for path in ("superdataset", "rawdata"):
+    live.project("study").branches.create({"branch": "rel/1.0", "ref": "dev"})
+    rel = live.merge_request("study", "rel/1.0", "main", timeout=3000)
+    live.settle("study")
+    live.merge("study", rel)
+    live.settle("study")
+    assert live.failed("study") == []
+    for path in ("study", "rawdata"):
         assert "1.0" in live.tags(path), path
     for path in ("release/rawdata", "release/superdataset"):
         tags = {t.name for t in live.gl.projects.get(f"{live.tools.group}/{path}").tags.list()}

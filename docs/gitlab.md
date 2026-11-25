@@ -7,7 +7,7 @@
 | dataset with `path: derivatives/fmriprep` | `<group>/derivatives/fmriprep` (subgroup `derivatives`) |
 | dataset without a path | `<group>/<dataset_id>` |
 | stream instance `a_PrismaFit16001` of `dicoms` | `<group>/sourcedata/dicoms/a_PrismaFit16001` |
-| study superdataset | `<group>/superdataset` |
+| study superdataset | `<group>/<dataset_id>` |
 
 Subdatasets refer to each other with relative URLs (`../../rawdata`), so the whole tree also
 resolves from any mirror with the same layout.

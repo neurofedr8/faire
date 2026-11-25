@@ -32,7 +32,7 @@ def test_stream_template(project):
 
 
 def test_superdataset_template(project):
-    root = project.path("superdataset")
+    root = project.path("study")
     assert (root / "README.md").read_text().startswith("# Study superdataset")
     assert not (root / "dmp.json").is_symlink()
 
@@ -49,7 +49,7 @@ def test_standard_template_rules_and_checks(project):
 
 
 def test_fixed_ci_configuration(project):
-    for logical in ("sourcedata/dicoms/a_PrismaFit16001", "rawdata", "superdataset"):
+    for logical in ("sourcedata/dicoms/a_PrismaFit16001", "rawdata", "study"):
         path = project.path(logical) / ".gitlab-ci.yml"
         assert not path.is_symlink()  # in git
         assert "faire plan --ci-render gitlab" in path.read_text()

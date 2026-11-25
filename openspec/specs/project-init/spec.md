@@ -53,7 +53,7 @@ The superdataset is the dataset with path `.`, rendered like any other. Init SHA
 - **THEN** every dataset with a path is present there and the ma-DMP is present
 
 ### Requirement: Platform repositories
-With a platform configured, init SHALL create a repository per dataset at `<group>/<path>` (as subgroups, or with `/` replaced by `.` on platforms without subgroups), stream instances at `<group>/sourcedata/<stream>/<site>_<instrument>`, and the superdataset at `<group>/superdataset`. Without a platform, init SHALL create the same structure locally.
+With a platform configured, init SHALL create a repository per dataset at `<group>/<path>` (as subgroups, or with `/` replaced by `.` on platforms without subgroups), stream instances at `<group>/sourcedata/<stream>/<site>_<instrument>`, and the superdataset at `<group>/<dataset_id>`. Without a platform, init SHALL create the same structure locally.
 
 #### Scenario: Flat platform
 - **WHEN** init targets a platform without subgroups and a dataset has path `derivatives/fmriprep`
@@ -62,6 +62,10 @@ With a platform configured, init SHALL create a repository per dataset at `<grou
 #### Scenario: Local mode
 - **WHEN** init runs without a platform
 - **THEN** the same datasets, links and remotes exist locally and no platform request is made
+
+#### Scenario: Superdataset named after the study
+- **WHEN** the dataset with path `.` has identifier `studyx`
+- **THEN** its repository is `<group>/studyx`
 
 ### Requirement: Branches and platform policies
 Init SHALL create `base` as the default branch of each standard and derived dataset, with `dev` and `pilot` starting from it. It SHALL make `dev` the default branch of every platform repository, where pull requests go. It SHALL protect `base`, `dev`, `pilot` and session branches, require one approval to merge a session, and forbid squash merges.

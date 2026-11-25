@@ -244,15 +244,15 @@ def test_study_from_index_to_release(study):
         ["ls-tree", "-r", "--name-only", "dev"])
 
     # release: rel/1.0 from the superdataset's dev, then the reviewed merge into main
-    sup = ci.clone("superdataset", "dev")
+    sup = ci.clone("study", "dev")
     sup.repo.call_git(["push", "-q", "--no-verify", "origin", "dev:refs/heads/rel/1.0"])
-    ci.pipeline("superdataset", "rel/1.0")
-    superdataset = platform.get_repository(f"{GROUP}/superdataset")
+    ci.pipeline("study", "rel/1.0")
+    superdataset = platform.get_repository(f"{GROUP}/study")
     assert any(pr.source == "rel/1.0" and pr.target == "main"
                for pr in platform.open_pull_requests(superdataset))
-    ci.platform_merge("superdataset", "rel/1.0", "main")
+    ci.platform_merge("study", "rel/1.0", "main")
 
-    for path in ("superdataset", "rawdata", "derivatives/fmriprep"):
+    for path in ("study", "rawdata", "derivatives/fmriprep"):
         tags = Dataset(platform.get_repository(f"{GROUP}/{path}").url).repo.call_git(["tag"])
         assert "1.0" in tags.split(), path
     mirror = Dataset(env.root / "mirror" / "fmriprep")
